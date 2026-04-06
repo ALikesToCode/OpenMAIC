@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,6 +49,7 @@ interface ProviderConfigPanelProps {
   onEditModel: (index: number) => void;
   onDeleteModel: (index: number) => void;
   onAddModel: () => void;
+  onSyncModels?: () => void | Promise<void>;
   onResetToDefault?: () => void; // Reset provider to default configuration
   isBuiltIn: boolean; // To determine if reset button should be shown
 }
@@ -63,6 +65,7 @@ export function ProviderConfigPanel({
   onEditModel,
   onDeleteModel,
   onAddModel,
+  onSyncModels,
   onResetToDefault,
   isBuiltIn,
 }: ProviderConfigPanelProps) {
@@ -76,6 +79,7 @@ export function ProviderConfigPanel({
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [isSyncingModels, setIsSyncingModels] = useState(false);
 
   // Update local state when provider changes or initial values change
   useEffect(() => {
@@ -292,6 +296,29 @@ export function ProviderConfigPanel({
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Label className="text-base">{t('settings.models')}</Label>
           <div className="flex items-center gap-2 flex-wrap">
+            {provider.id === 'navy' && onSyncModels && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  setIsSyncingModels(true);
+                  try {
+                    await onSyncModels();
+                  } finally {
+                    setIsSyncingModels(false);
+                  }
+                }}
+                className="gap-1.5"
+                disabled={isSyncingModels}
+              >
+                {isSyncingModels ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {t('settings.syncNavyModels')}
+              </Button>
+            )}
             {isBuiltIn && onResetToDefault && (
               <Button
                 variant="outline"

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
+import { fetchNavyModelsForSurface, toCustomModelEntries } from '@/lib/navy/model-sync';
 import {
   Loader2,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   Plus,
   Settings2,
   Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { VideoProviderId } from '@/lib/media/types';
@@ -37,6 +39,9 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
   const [testLoading, setTestLoading] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [syncMessage, setSyncMessage] = useState('');
 
   // Model dialog state
   const [showModelDialog, setShowModelDialog] = useState(false);
@@ -49,6 +54,8 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
     setPrevSelectedProviderId(selectedProviderId);
     setTestStatus('idle');
     setTestMessage('');
+    setSyncStatus('idle');
+    setSyncMessage('');
   }
 
   const currentConfig = videoProvidersConfig[selectedProviderId];
@@ -66,6 +73,33 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
 
   const handleBaseUrlChange = (baseUrl: string) => {
     setVideoProviderConfig(selectedProviderId, { baseUrl });
+  };
+
+  const handleSyncNavyModels = async () => {
+    if (selectedProviderId !== 'navy-video') return;
+
+    setSyncLoading(true);
+    setSyncStatus('idle');
+    setSyncMessage('');
+
+    try {
+      const builtInModelIds = new Set((currentProvider?.models || []).map((model) => model.id));
+      const syncedCustomModels = toCustomModelEntries(
+        await fetchNavyModelsForSurface('video'),
+      ).filter((model) => !builtInModelIds.has(model.id));
+
+      setVideoProviderConfig(selectedProviderId, {
+        customModels: syncedCustomModels,
+      });
+
+      setSyncStatus('success');
+      setSyncMessage(t('settings.modelSyncSuccess'));
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage(error instanceof Error ? error.message : t('settings.modelSyncFailed'));
+    } finally {
+      setSyncLoading(false);
+    }
   };
 
   const handleTest = async () => {
@@ -252,11 +286,46 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Label className="text-base">{t('settings.models')}</Label>
-          <Button variant="outline" size="sm" onClick={handleOpenAddModel} className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            {t('settings.addNewModel')}
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedProviderId === 'navy-video' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncNavyModels}
+                disabled={syncLoading}
+                className="gap-1.5"
+              >
+                {syncLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {t('settings.syncNavyModels')}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={handleOpenAddModel} className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" />
+              {t('settings.addNewModel')}
+            </Button>
+          </div>
         </div>
+        {syncMessage && (
+          <div
+            className={cn(
+              'rounded-lg p-3 text-sm overflow-hidden',
+              syncStatus === 'success' &&
+                'bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800',
+              syncStatus === 'error' &&
+                'bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800',
+            )}
+          >
+            <div className="flex items-start gap-2 min-w-0">
+              {syncStatus === 'success' && <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />}
+              {syncStatus === 'error' && <XCircle className="h-4 w-4 mt-0.5 shrink-0" />}
+              <p className="flex-1 min-w-0 break-all">{syncMessage}</p>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-1.5">
           {/* Built-in models */}

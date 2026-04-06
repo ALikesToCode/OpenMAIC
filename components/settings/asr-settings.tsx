@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -11,11 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { fetchNavyModelsForSurface, toCustomModelEntries } from '@/lib/navy/model-sync';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { ASR_PROVIDERS } from '@/lib/audio/constants';
 import type { ASRProviderId } from '@/lib/audio/types';
-import { Mic, MicOff, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
+import { Mic, MicOff, CheckCircle2, XCircle, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
 
@@ -40,6 +41,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
   const [asrResult, setASRResult] = useState('');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
+  const [syncingModels, setSyncingModels] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
   // Reset state when provider changes (derived state pattern)
@@ -51,6 +53,55 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
     setTestMessage('');
     setASRResult('');
   }
+
+  const customModels = useMemo(
+    () => asrProvidersConfig[selectedProviderId]?.customModels || [],
+    [asrProvidersConfig, selectedProviderId],
+  );
+  const allModels = useMemo(() => {
+    const builtInModels = asrProvider.models || [];
+    const builtInIds = new Set(builtInModels.map((model) => model.id));
+    return [...builtInModels, ...customModels.filter((model) => !builtInIds.has(model.id))];
+  }, [asrProvider.models, customModels]);
+
+  const handleSyncNavyModels = async () => {
+    if (selectedProviderId !== 'navy-asr') return;
+
+    setSyncingModels(true);
+    setTestStatus('idle');
+    setTestMessage('');
+
+    try {
+      const remoteModels = await fetchNavyModelsForSurface('asr');
+      const syncedModels = toCustomModelEntries(remoteModels);
+      const builtInIds = new Set(asrProvider.models.map((model) => model.id));
+      const mergedCustomModels = syncedModels.filter((model) => !builtInIds.has(model.id));
+
+      const currentModelId =
+        asrProvidersConfig[selectedProviderId]?.modelId || asrProvider.defaultModelId;
+      const availableModelIds = new Set([
+        ...asrProvider.models.map((model) => model.id),
+        ...mergedCustomModels.map((model) => model.id),
+      ]);
+
+      setASRProviderConfig(selectedProviderId, {
+        customModels: mergedCustomModels,
+        modelId:
+          currentModelId && availableModelIds.has(currentModelId)
+            ? currentModelId
+            : asrProvider.defaultModelId || mergedCustomModels[0]?.id || '',
+      });
+
+      setTestStatus('success');
+      setTestMessage(t('settings.modelSyncSuccess'));
+    } catch (error) {
+      log.error('Failed to sync Navy ASR models:', error);
+      setTestStatus('error');
+      setTestMessage(error instanceof Error ? error.message : t('settings.modelSyncFailed'));
+    } finally {
+      setSyncingModels(false);
+    }
+  };
 
   const handleToggleASRRecording = async () => {
     if (isRecording) {
@@ -295,9 +346,27 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
       )}
 
       {/* Model Selection */}
-      {asrProvider.models.length > 0 && (
+      {allModels.length > 0 && (
         <div className="space-y-2">
-          <Label className="text-sm">{t('settings.ttsModel')}</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-sm">{t('settings.asrModel')}</Label>
+            {selectedProviderId === 'navy-asr' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncNavyModels}
+                disabled={syncingModels}
+                className="gap-1.5"
+              >
+                {syncingModels ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {t('settings.syncNavyModels')}
+              </Button>
+            )}
+          </div>
           <Select
             value={asrProvidersConfig[selectedProviderId]?.modelId || asrProvider.defaultModelId}
             onValueChange={(value) => setASRProviderConfig(selectedProviderId, { modelId: value })}
@@ -306,7 +375,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {asrProvider.models.map((model) => (
+              {allModels.map((model) => (
                 <SelectItem key={model.id} value={model.id}>
                   {model.name}
                 </SelectItem>

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
+import { fetchNavyModelsForSurface, toCustomModelEntries } from '@/lib/navy/model-sync';
 import {
   Loader2,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   Plus,
   Settings2,
   Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ImageProviderId } from '@/lib/media/types';
@@ -31,11 +33,12 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
 
   const imageModelId = useSettingsStore((state) => state.imageModelId);
   const imageProvidersConfig = useSettingsStore((state) => state.imageProvidersConfig);
-  const _setImageModelId = useSettingsStore((state) => state.setImageModelId);
+  const setImageModelId = useSettingsStore((state) => state.setImageModelId);
   const setImageProviderConfig = useSettingsStore((state) => state.setImageProviderConfig);
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
 
@@ -138,6 +141,57 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
       customModels: newCustomModels,
     });
   };
+
+  const handleSyncNavyModels = useCallback(async () => {
+    if (selectedProviderId !== 'navy-image') return;
+
+    setSyncLoading(true);
+    setTestMessage('');
+    setTestStatus('idle');
+
+    try {
+      const builtInIds = new Set(builtInModels.map((model) => model.id));
+      const syncedModels = toCustomModelEntries(await fetchNavyModelsForSurface('image')).filter(
+        (model) => !builtInIds.has(model.id),
+      );
+
+      const mergedCustomModels = [
+        ...syncedModels,
+        ...customModels.filter((model) => !syncedModels.some((synced) => synced.id === model.id)),
+      ];
+
+      setImageProviderConfig(selectedProviderId, {
+        customModels: mergedCustomModels,
+      });
+
+      const currentModelStillExists =
+        builtInModels.some((model) => model.id === imageModelId) ||
+        mergedCustomModels.some((model) => model.id === imageModelId);
+
+      if (!currentModelStillExists) {
+        const nextModelId = builtInModels[0]?.id || mergedCustomModels[0]?.id;
+        if (nextModelId) {
+          setImageModelId(nextModelId);
+        }
+      }
+
+      setTestStatus('success');
+      setTestMessage(t('settings.modelSyncSuccess'));
+    } catch (error) {
+      setTestStatus('error');
+      setTestMessage(error instanceof Error ? error.message : t('settings.modelSyncFailed'));
+    } finally {
+      setSyncLoading(false);
+    }
+  }, [
+    selectedProviderId,
+    builtInModels,
+    customModels,
+    imageModelId,
+    setImageProviderConfig,
+    setImageModelId,
+    t,
+  ]);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -249,10 +303,28 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Label className="text-base">{t('settings.models')}</Label>
-          <Button variant="outline" size="sm" onClick={handleOpenAddModel} className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            {t('settings.addNewModel')}
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedProviderId === 'navy-image' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncNavyModels}
+                disabled={syncLoading}
+                className="gap-1.5"
+              >
+                {syncLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {t('settings.syncNavyModels')}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={handleOpenAddModel} className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" />
+              {t('settings.addNewModel')}
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-1.5">

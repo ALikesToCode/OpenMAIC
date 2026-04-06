@@ -30,6 +30,7 @@ import {
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { toast } from 'sonner';
+import { fetchNavyModelsForSurface, toCustomModelEntries } from '@/lib/navy/model-sync';
 import { type ProviderId } from '@/lib/ai/providers';
 import { PROVIDERS } from '@/lib/ai/providers';
 import { cn } from '@/lib/utils';
@@ -320,6 +321,57 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
   const handleProviderConfigSave = () => {
     setSaveStatus('saved');
     setTimeout(() => setSaveStatus('idle'), 2000);
+  };
+
+  const handleSyncNavyProviderModels = async (pid: ProviderId) => {
+    if (pid !== 'navy') return;
+
+    try {
+      const remoteModels = toCustomModelEntries(await fetchNavyModelsForSurface('llm')).map(
+        (model) => ({
+          id: model.id,
+          name: model.name,
+          capabilities: {
+            streaming: true,
+            tools: true,
+            vision: false,
+          },
+        }),
+      );
+
+      if (remoteModels.length === 0) {
+        toast.error(t('settings.noModelsAvailable'));
+        return;
+      }
+
+      const existingModels = providersConfig[pid]?.models || [];
+      const remoteIds = new Set(remoteModels.map((model) => model.id));
+      const mergedModels = [
+        ...remoteModels,
+        ...existingModels.filter((model) => !remoteIds.has(model.id)),
+      ];
+
+      const updatedConfig = {
+        ...providersConfig,
+        [pid]: {
+          ...providersConfig[pid],
+          models: mergedModels,
+        },
+      };
+
+      setProvidersConfig(updatedConfig);
+
+      if (selectedProviderId === pid) {
+        const hasCurrentModel = mergedModels.some((model) => model.id === _modelId);
+        if (!hasCurrentModel) {
+          setModel(pid, mergedModels[0].id);
+        }
+      }
+
+      toast.success(t('settings.modelSyncSuccess'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('settings.modelSyncFailed'));
+    }
   };
 
   const selectedProvider = providersConfig[selectedProviderId]
@@ -981,6 +1033,11 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                   onEditModel={(index) => handleEditModel(selectedProviderId, index)}
                   onDeleteModel={(index) => handleDeleteModel(selectedProviderId, index)}
                   onAddModel={handleAddModel}
+                  onSyncModels={
+                    selectedProviderId === 'navy'
+                      ? () => handleSyncNavyProviderModels(selectedProviderId)
+                      : undefined
+                  }
                   onResetToDefault={() => handleResetProvider(selectedProviderId)}
                   isBuiltIn={providersConfig[selectedProviderId]?.isBuiltIn ?? true}
                 />
