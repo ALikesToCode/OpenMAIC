@@ -30,7 +30,6 @@ import { GenerationToolbar } from '@/components/generation/generation-toolbar';
 import { AgentBar } from '@/components/agent/agent-bar';
 import { useTheme } from '@/lib/hooks/use-theme';
 import { nanoid } from 'nanoid';
-import { storePdfBlob } from '@/lib/utils/image-storage';
 import type { UserRequirements } from '@/lib/types/generation';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useUserProfileStore, AVATAR_OPTIONS } from '@/lib/store/user-profile';
@@ -48,6 +47,7 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
+import { prepareSourceDocumentInput, isPdfSourceDocumentFile } from '@/lib/utils/source-document';
 
 const log = createLogger('Home');
 
@@ -271,25 +271,30 @@ function HomePage() {
       let pdfProviderId: string | undefined;
       let pdfProviderConfig: { apiKey?: string; baseUrl?: string } | undefined;
 
+      let pdfText = '';
       if (form.pdfFile) {
-        pdfStorageKey = await storePdfBlob(form.pdfFile);
-        pdfFileName = form.pdfFile.name;
+        const preparedDocument = await prepareSourceDocumentInput(form.pdfFile);
+        pdfText = preparedDocument.pdfText;
+        pdfStorageKey = preparedDocument.pdfStorageKey;
+        pdfFileName = preparedDocument.pdfFileName;
 
-        const settings = useSettingsStore.getState();
-        pdfProviderId = settings.pdfProviderId;
-        const providerCfg = settings.pdfProvidersConfig?.[settings.pdfProviderId];
-        if (providerCfg) {
-          pdfProviderConfig = {
-            apiKey: providerCfg.apiKey,
-            baseUrl: providerCfg.baseUrl,
-          };
+        if (isPdfSourceDocumentFile(form.pdfFile)) {
+          const settings = useSettingsStore.getState();
+          pdfProviderId = settings.pdfProviderId;
+          const providerCfg = settings.pdfProvidersConfig?.[settings.pdfProviderId];
+          if (providerCfg) {
+            pdfProviderConfig = {
+              apiKey: providerCfg.apiKey,
+              baseUrl: providerCfg.baseUrl,
+            };
+          }
         }
       }
 
       const sessionState = {
         sessionId: nanoid(),
         requirements,
-        pdfText: '',
+        pdfText,
         pdfImages: [],
         imageStorageIds: [],
         pdfStorageKey,

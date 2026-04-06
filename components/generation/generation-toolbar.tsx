@@ -21,10 +21,15 @@ import type { WebSearchProviderId } from '@/lib/web-search/types';
 import type { ProviderId } from '@/lib/ai/providers';
 import type { SettingsSection } from '@/lib/types/settings';
 import { MediaPopover } from '@/components/generation/media-popover';
+import {
+  isPdfSourceDocumentFile,
+  isSupportedSourceDocumentFile,
+  SOURCE_DOCUMENT_ACCEPT,
+} from '@/lib/utils/source-document';
 
 // ─── Constants ───────────────────────────────────────────────
-const MAX_PDF_SIZE_MB = 50;
-const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
+const MAX_SOURCE_DOCUMENT_SIZE_MB = 50;
+const MAX_SOURCE_DOCUMENT_SIZE_BYTES = MAX_SOURCE_DOCUMENT_SIZE_MB * 1024 * 1024;
 
 // ─── Types ───────────────────────────────────────────────────
 export interface GenerationToolbarProps {
@@ -96,10 +101,15 @@ export function GenerationToolbar({
 
   const currentProviderConfig = providersConfig?.[currentProviderId];
 
-  // PDF handler
+  const isPdfSelected = pdfFile ? isPdfSourceDocumentFile(pdfFile) : true;
+
+  // Source document handler
   const handleFileSelect = (file: File) => {
-    if (file.type !== 'application/pdf') return;
-    if (file.size > MAX_PDF_SIZE_BYTES) {
+    if (!isSupportedSourceDocumentFile(file)) {
+      onPdfError(t('upload.unsupportedFileType'));
+      return;
+    }
+    if (file.size > MAX_SOURCE_DOCUMENT_SIZE_BYTES) {
       onPdfError(t('upload.fileTooLarge'));
       return;
     }
@@ -147,7 +157,7 @@ export function GenerationToolbar({
       {/* ── Separator ── */}
       <div className="w-px h-4 bg-border/60 mx-1" />
 
-      {/* ── PDF (parser + upload) combined Popover ── */}
+      {/* ── Source document upload popover ── */}
       <Popover>
         <PopoverTrigger asChild>
           {pdfFile ? (
@@ -172,39 +182,43 @@ export function GenerationToolbar({
           )}
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-0">
-          {/* Parser selector */}
-          <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-            <span className="text-xs font-medium text-muted-foreground shrink-0">
-              {t('toolbar.pdfParser')}
-            </span>
-            <Select value={pdfProviderId} onValueChange={(v) => setPDFProvider(v as PDFProviderId)}>
-              <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.values(PDF_PROVIDERS).map((provider) => {
-                  const cfg = pdfProvidersConfig[provider.id];
-                  const available =
-                    !provider.requiresApiKey || !!cfg?.apiKey || !!cfg?.isServerConfigured;
-                  return (
-                    <SelectItem key={provider.id} value={provider.id} disabled={!available}>
-                      <div className={cn('flex items-center gap-1.5', !available && 'opacity-50')}>
-                        {provider.icon && (
-                          <img src={provider.icon} alt={provider.name} className="w-3.5 h-3.5" />
-                        )}
-                        {provider.name}
-                        {cfg?.isServerConfigured && (
-                          <span className="text-[9px] px-1 py-0 rounded border text-muted-foreground">
-                            {t('settings.serverConfigured')}
-                          </span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
+          {isPdfSelected && (
+            <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+              <span className="text-xs font-medium text-muted-foreground shrink-0">
+                {t('toolbar.pdfParser')}
+              </span>
+              <Select
+                value={pdfProviderId}
+                onValueChange={(v) => setPDFProvider(v as PDFProviderId)}
+              >
+                <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.values(PDF_PROVIDERS).map((provider) => {
+                    const cfg = pdfProvidersConfig[provider.id];
+                    const available =
+                      !provider.requiresApiKey || !!cfg?.apiKey || !!cfg?.isServerConfigured;
+                    return (
+                      <SelectItem key={provider.id} value={provider.id} disabled={!available}>
+                        <div className={cn('flex items-center gap-1.5', !available && 'opacity-50')}>
+                          {provider.icon && (
+                            <img src={provider.icon} alt={provider.name} className="w-3.5 h-3.5" />
+                          )}
+                          {provider.name}
+                          {cfg?.isServerConfigured && (
+                            <span className="text-[9px] px-1 py-0 rounded border text-muted-foreground">
+                              {t('settings.serverConfigured')}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Upload area / file info */}
           <div className="px-3 pb-3">
@@ -212,7 +226,7 @@ export function GenerationToolbar({
               type="file"
               ref={fileInputRef}
               className="hidden"
-              accept=".pdf"
+              accept={SOURCE_DOCUMENT_ACCEPT}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) handleFileSelect(f);
