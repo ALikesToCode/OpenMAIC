@@ -17,6 +17,7 @@ import {
   testMiniMaxImageConnectivity,
 } from './adapters/minimax-image-adapter';
 import { generateWithGrokImage, testGrokImageConnectivity } from './adapters/grok-image-adapter';
+import { generateWithNavyImage, testNavyImageConnectivity } from './adapters/navy-image-adapter';
 
 export const IMAGE_PROVIDERS: Record<ImageProviderId, ImageProviderConfig> = {
   seedream: {
@@ -93,6 +94,19 @@ export const IMAGE_PROVIDERS: Record<ImageProviderId, ImageProviderConfig> = {
     ],
     supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
   },
+  'navy-image': {
+    id: 'navy-image',
+    name: 'Navy Image',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://api.navy/v1',
+    models: [
+      { id: 'flux', name: 'Flux' },
+      { id: 'gpt-image-1.5', name: 'GPT Image 1.5' },
+      { id: 'dall-e-3', name: 'DALL·E 3' },
+      { id: 'grok-imagine', name: 'Grok Imagine' },
+    ],
+    supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
+  },
 };
 
 export async function testImageConnectivity(
@@ -109,6 +123,8 @@ export async function testImageConnectivity(
       return testMiniMaxImageConnectivity(config);
     case 'grok-image':
       return testGrokImageConnectivity(config);
+    case 'navy-image':
+      return testNavyImageConnectivity(config);
     default:
       return {
         success: false,
@@ -132,6 +148,8 @@ export async function generateImage(
       return generateWithMiniMaxImage(config, options);
     case 'grok-image':
       return generateWithGrokImage(config, options);
+    case 'navy-image':
+      return generateWithNavyImage(config, options);
     default:
       throw new Error(`Unsupported image provider: ${config.providerId}`);
   }

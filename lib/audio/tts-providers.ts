@@ -152,6 +152,8 @@ export async function generateTTS(
 
     case 'minimax-tts':
       return await generateMiniMaxTTS(config, text);
+    case 'navy-tts':
+      return await generateNavyTTS(config, text);
     case 'doubao-tts':
       return await generateDoubaoTTS(config, text);
     case 'elevenlabs-tts':
@@ -200,6 +202,49 @@ async function generateOpenAITTS(
   return {
     audio: new Uint8Array(arrayBuffer),
     format: 'mp3',
+  };
+}
+
+/**
+ * Navy TTS implementation (OpenAI-compatible /audio/speech proxy)
+ */
+async function generateNavyTTS(config: TTSModelConfig, text: string): Promise<TTSGenerationResult> {
+  const baseUrl = config.baseUrl || TTS_PROVIDERS['navy-tts'].defaultBaseUrl;
+  const requestedFormat = config.format || 'mp3';
+
+  const response = await fetch(`${baseUrl}/audio/speech`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      'Content-Type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify({
+      model: config.modelId || 'gpt-4o-mini-tts',
+      input: text,
+      voice: config.voice,
+      speed: config.speed || 1.0,
+      response_format: requestedFormat,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => response.statusText);
+    let errorMessage = `Navy TTS API error: ${errorText || response.statusText}`;
+    try {
+      const errorJson = JSON.parse(errorText);
+      if (errorJson.error?.message) {
+        errorMessage = `Navy TTS API error: ${errorJson.error.message}`;
+      }
+    } catch {
+      // Non-JSON error response; keep raw text
+    }
+    throw new Error(errorMessage);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return {
+    audio: new Uint8Array(arrayBuffer),
+    format: requestedFormat,
   };
 }
 

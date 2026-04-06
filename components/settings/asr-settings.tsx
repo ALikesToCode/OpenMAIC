@@ -225,6 +225,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
             let endpointPath = '';
             switch (selectedProviderId) {
               case 'openai-whisper':
+              case 'navy-asr':
                 endpointPath = '/audio/transcriptions';
                 break;
               case 'qwen-asr':

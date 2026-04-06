@@ -951,6 +951,72 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
       },
     ],
   },
+
+  navy: {
+    id: 'navy',
+    name: 'Navy',
+    type: 'openai',
+    defaultBaseUrl: 'https://api.navy/v1',
+    requiresApiKey: true,
+    icon: '/logos/navy.svg',
+    models: [
+      {
+        id: 'gpt-5.4',
+        name: 'GPT-5.4',
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+        },
+      },
+      {
+        id: 'gpt-5.4-mini',
+        name: 'GPT-5.4 Mini',
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+        },
+      },
+      {
+        id: 'claude-opus-4.5',
+        name: 'Claude Opus 4.5',
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+        },
+      },
+      {
+        id: 'gemini-3-flash-preview',
+        name: 'Gemini 3 Flash Preview',
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+        },
+      },
+      {
+        id: 'deepseek-v3.1',
+        name: 'DeepSeek V3.1',
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+        },
+      },
+      {
+        id: 'grok-3-fast',
+        name: 'Grok 3 Fast',
+        capabilities: { streaming: true, tools: true, vision: false },
+      },
+      {
+        id: 'qwen3.5-397b-a17b',
+        name: 'Qwen3.5 397B A17B',
+        capabilities: { streaming: true, tools: true, vision: false },
+      },
+    ],
+  },
 };
 
 /**

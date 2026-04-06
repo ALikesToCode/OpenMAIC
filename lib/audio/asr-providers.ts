@@ -184,6 +184,9 @@ export async function transcribeAudio(
     case 'qwen-asr':
       return await transcribeQwenASR(config, audioBuffer);
 
+    case 'navy-asr':
+      return await transcribeNavyASR(config, audioBuffer);
+
     default:
       throw new Error(`Unsupported ASR provider: ${config.providerId}`);
   }
@@ -226,6 +229,49 @@ async function transcribeOpenAIWhisper(
     return { text: result.text || '' };
   } catch (error: unknown) {
     // Short/silent audio may cause the SDK to throw — treat as empty transcription
+    const errMsg = error instanceof Error ? error.message : '';
+    if (errMsg.includes('empty') || errMsg.includes('too short')) {
+      return { text: '' };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Navy ASR implementation (OpenAI-compatible /audio/transcriptions)
+ */
+async function transcribeNavyASR(
+  config: ASRModelConfig,
+  audioBuffer: Buffer | Blob,
+): Promise<ASRTranscriptionResult> {
+  const openai = createOpenAI({
+    apiKey: config.apiKey!,
+    baseURL: config.baseUrl || 'https://api.navy/v1',
+  });
+
+  let audioData: Buffer | Uint8Array;
+  if (audioBuffer instanceof Buffer) {
+    audioData = audioBuffer;
+  } else if (audioBuffer instanceof Blob) {
+    const arrayBuffer = await audioBuffer.arrayBuffer();
+    audioData = new Uint8Array(arrayBuffer);
+  } else {
+    throw new Error('Invalid audio buffer type');
+  }
+
+  try {
+    const result = await transcribe({
+      model: openai.transcription(config.modelId || 'gpt-4o-mini-transcribe'),
+      audio: audioData,
+      providerOptions: {
+        openai: {
+          language: config.language === 'auto' ? undefined : config.language,
+        },
+      },
+    });
+
+    return { text: result.text || '' };
+  } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : '';
     if (errMsg.includes('empty') || errMsg.includes('too short')) {
       return { text: '' };

@@ -49,9 +49,11 @@ const LLM_ENV_MAP: Record<string, string> = {
   SILICONFLOW: 'siliconflow',
   DOUBAO: 'doubao',
   GROK: 'grok',
+  NAVY: 'navy',
 };
 
 const TTS_ENV_MAP: Record<string, string> = {
+  NAVY: 'navy-tts',
   TTS_OPENAI: 'openai-tts',
   TTS_AZURE: 'azure-tts',
   TTS_GLM: 'glm-tts',
@@ -59,11 +61,14 @@ const TTS_ENV_MAP: Record<string, string> = {
   TTS_DOUBAO: 'doubao-tts',
   TTS_ELEVENLABS: 'elevenlabs-tts',
   TTS_MINIMAX: 'minimax-tts',
+  TTS_NAVY: 'navy-tts',
 };
 
 const ASR_ENV_MAP: Record<string, string> = {
+  NAVY: 'navy-asr',
   ASR_OPENAI: 'openai-whisper',
   ASR_QWEN: 'qwen-asr',
+  ASR_NAVY: 'navy-asr',
 };
 
 const PDF_ENV_MAP: Record<string, string> = {
@@ -72,20 +77,24 @@ const PDF_ENV_MAP: Record<string, string> = {
 };
 
 const IMAGE_ENV_MAP: Record<string, string> = {
+  NAVY: 'navy-image',
   IMAGE_SEEDREAM: 'seedream',
   IMAGE_QWEN_IMAGE: 'qwen-image',
   IMAGE_NANO_BANANA: 'nano-banana',
   IMAGE_MINIMAX: 'minimax-image',
   IMAGE_GROK: 'grok-image',
+  IMAGE_NAVY: 'navy-image',
 };
 
 const VIDEO_ENV_MAP: Record<string, string> = {
+  NAVY: 'navy-video',
   VIDEO_SEEDANCE: 'seedance',
   VIDEO_KLING: 'kling',
   VIDEO_VEO: 'veo',
   VIDEO_SORA: 'sora',
   VIDEO_MINIMAX: 'minimax-video',
   VIDEO_GROK: 'grok-video',
+  VIDEO_NAVY: 'navy-video',
 };
 
 const WEB_SEARCH_ENV_MAP: Record<string, string> = {
@@ -336,11 +345,12 @@ export function resolvePDFBaseUrl(providerId: string, clientBaseUrl?: string): s
 // Public API — Image Generation
 // ---------------------------------------------------------------------------
 
-export function getServerImageProviders(): Record<string, Record<string, never>> {
+export function getServerImageProviders(): Record<string, { baseUrl?: string }> {
   const cfg = getConfig();
-  const result: Record<string, Record<string, never>> = {};
-  for (const id of Object.keys(cfg.image)) {
+  const result: Record<string, { baseUrl?: string }> = {};
+  for (const [id, entry] of Object.entries(cfg.image)) {
     result[id] = {};
+    if (entry.baseUrl) result[id].baseUrl = entry.baseUrl;
   }
   return result;
 }
@@ -362,11 +372,12 @@ export function resolveImageBaseUrl(
 // Public API — Video Generation
 // ---------------------------------------------------------------------------
 
-export function getServerVideoProviders(): Record<string, Record<string, never>> {
+export function getServerVideoProviders(): Record<string, { baseUrl?: string }> {
   const cfg = getConfig();
-  const result: Record<string, Record<string, never>> = {};
-  for (const id of Object.keys(cfg.video)) {
+  const result: Record<string, { baseUrl?: string }> = {};
+  for (const [id, entry] of Object.entries(cfg.video)) {
     result[id] = {};
+    if (entry.baseUrl) result[id].baseUrl = entry.baseUrl;
   }
   return result;
 }

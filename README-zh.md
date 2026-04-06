@@ -102,6 +102,7 @@ OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_API_KEY=...
 GROK_API_KEY=xai-...
+NAVY_API_KEY=sk-navy-...
 ```
 
 也可以通过 `server-providers.yml` 配置服务商：
@@ -114,7 +115,7 @@ providers:
     apiKey: sk-ant-...
 ```
 
-支持的服务商：**OpenAI**、**Anthropic**、**Google Gemini**、**DeepSeek**、**MiniMax**、**Grok (xAI)** 以及任何兼容 OpenAI API 的服务。
+支持的服务商：**OpenAI**、**Anthropic**、**Google Gemini**、**DeepSeek**、**MiniMax**、**Grok (xAI)**、**NavyAI** 以及任何兼容 OpenAI API 的服务。
 
 MiniMax 快速示例：
 
@@ -133,11 +134,69 @@ VIDEO_MINIMAX_API_KEY=...
 VIDEO_MINIMAX_BASE_URL=https://api.minimaxi.com
 ```
 
+NavyAI 快速示例：
+
+```env
+NAVY_API_KEY=sk-navy-...
+NAVY_BASE_URL=https://api.navy/v1
+DEFAULT_MODEL=navy:gpt-5
+
+TTS_NAVY_API_KEY=sk-navy-...
+TTS_NAVY_BASE_URL=https://api.navy/v1
+
+ASR_NAVY_API_KEY=sk-navy-...
+ASR_NAVY_BASE_URL=https://api.navy/v1
+
+IMAGE_NAVY_API_KEY=sk-navy-...
+IMAGE_NAVY_BASE_URL=https://api.navy/v1
+
+VIDEO_NAVY_API_KEY=sk-navy-...
+VIDEO_NAVY_BASE_URL=https://api.navy/v1
+```
+
+也可以在 `server-providers.yml` 中按分类配置 NavyAI：
+
+```yaml
+providers:
+  navy:
+    apiKey: sk-navy-...
+    baseUrl: https://api.navy/v1
+
+tts:
+  navy-tts:
+    apiKey: sk-navy-...
+    baseUrl: https://api.navy/v1
+
+asr:
+  navy-asr:
+    apiKey: sk-navy-...
+    baseUrl: https://api.navy/v1
+
+image:
+  navy-image:
+    apiKey: sk-navy-...
+    baseUrl: https://api.navy/v1
+
+video:
+  navy-video:
+    apiKey: sk-navy-...
+    baseUrl: https://api.navy/v1
+```
+
+说明：
+
+- NavyAI 是统一代理，聊天、TTS、ASR、图像生成、视频生成都可以通过同一个 Key / Base URL 接入。
+- 聊天默认走 OpenAI 兼容接口 `POST /v1/chat/completions`。
+- 图像与视频统一走 `POST /v1/images/generations`，其中视频模型通常会返回异步任务，需要轮询。
+- 可通过 `GET https://api.navy/v1/models` 获取 Navy 当前支持的模型列表，并按接口类型筛选可用模型。
+
 > **推荐模型：** **Gemini 3 Flash** — 效果与速度的最佳平衡。追求最高质量可选 **Gemini 3.1 Pro**（速度较慢）。
 >
 > 如果希望 OpenMAIC 服务端默认走 Gemini，还需要额外设置 `DEFAULT_MODEL=google:gemini-3-flash-preview`。
 >
 > 如果希望默认走 MiniMax，可设置 `DEFAULT_MODEL=minimax:MiniMax-M2.7-highspeed`。
+>
+> 如果希望默认走 NavyAI，可设置 `DEFAULT_MODEL=navy:gpt-5`。
 
 ### 3. 启动
 

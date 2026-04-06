@@ -17,6 +17,7 @@ import {
   testMiniMaxVideoConnectivity,
 } from './adapters/minimax-video-adapter';
 import { generateWithGrokVideo, testGrokVideoConnectivity } from './adapters/grok-video-adapter';
+import { generateWithNavyVideo, testNavyVideoConnectivity } from './adapters/navy-video-adapter';
 
 export const VIDEO_PROVIDERS: Record<VideoProviderId, VideoProviderConfig> = {
   seedance: {
@@ -106,6 +107,21 @@ export const VIDEO_PROVIDERS: Record<VideoProviderId, VideoProviderConfig> = {
     supportedDurations: [6],
     maxDuration: 6,
   },
+  'navy-video': {
+    id: 'navy-video',
+    name: 'Navy Video',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://api.navy/v1',
+    models: [
+      { id: 'cogvideox-flash', name: 'CogVideoX Flash' },
+      { id: 'grok-imagine-video', name: 'Grok Imagine Video' },
+      { id: 'veo-3.1', name: 'Veo 3.1' },
+    ],
+    supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16', '3:4', '21:9'],
+    supportedDurations: [5, 6, 8, 10],
+    supportedResolutions: ['480p', '720p', '1080p'],
+    maxDuration: 10,
+  },
 };
 
 export async function testVideoConnectivity(
@@ -122,6 +138,8 @@ export async function testVideoConnectivity(
       return testMiniMaxVideoConnectivity(config);
     case 'grok-video':
       return testGrokVideoConnectivity(config);
+    case 'navy-video':
+      return testNavyVideoConnectivity(config);
     default:
       return {
         success: false,
@@ -187,6 +205,8 @@ export async function generateVideo(
       return generateWithMiniMaxVideo(config, options);
     case 'grok-video':
       return generateWithGrokVideo(config, options);
+    case 'navy-video':
+      return generateWithNavyVideo(config, options);
     default:
       throw new Error(`Unsupported video provider: ${config.providerId}`);
   }

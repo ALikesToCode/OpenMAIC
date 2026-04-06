@@ -9,7 +9,12 @@ import type { ProviderId } from '@/lib/ai/providers';
 import type { ProvidersConfig } from '@/lib/types/settings';
 import { PROVIDERS } from '@/lib/ai/providers';
 import type { TTSProviderId, ASRProviderId } from '@/lib/audio/types';
-import { ASR_PROVIDERS, DEFAULT_TTS_VOICES, TTS_PROVIDERS } from '@/lib/audio/constants';
+import {
+  ASR_PROVIDERS,
+  DEFAULT_TTS_MODELS,
+  DEFAULT_TTS_VOICES,
+  TTS_PROVIDERS,
+} from '@/lib/audio/constants';
 import { PDF_PROVIDERS } from '@/lib/pdf/constants';
 import type { PDFProviderId } from '@/lib/pdf/types';
 import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
@@ -290,6 +295,7 @@ const getDefaultAudioConfig = () => ({
     'doubao-tts': { apiKey: '', baseUrl: '', enabled: false },
     'elevenlabs-tts': { apiKey: '', baseUrl: '', enabled: false },
     'minimax-tts': { apiKey: '', baseUrl: '', modelId: 'speech-2.8-hd', enabled: false },
+    'navy-tts': { apiKey: '', baseUrl: '', modelId: 'gpt-4o-mini-tts', enabled: false },
     'browser-native-tts': { apiKey: '', baseUrl: '', enabled: true },
   } as Record<
     TTSProviderId,
@@ -299,6 +305,7 @@ const getDefaultAudioConfig = () => ({
     'openai-whisper': { apiKey: '', baseUrl: '', enabled: true },
     'browser-native': { apiKey: '', baseUrl: '', enabled: true },
     'qwen-asr': { apiKey: '', baseUrl: '', enabled: false },
+    'navy-asr': { apiKey: '', baseUrl: '', modelId: 'gpt-4o-mini-transcribe', enabled: false },
   } as Record<ASRProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
 
@@ -321,6 +328,7 @@ const getDefaultImageConfig = () => ({
     'nano-banana': { apiKey: '', baseUrl: '', enabled: false },
     'minimax-image': { apiKey: '', baseUrl: '', enabled: false },
     'grok-image': { apiKey: '', baseUrl: '', enabled: false },
+    'navy-image': { apiKey: '', baseUrl: '', enabled: false },
   } as Record<ImageProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
 
@@ -335,6 +343,7 @@ const getDefaultVideoConfig = () => ({
     sora: { apiKey: '', baseUrl: '', enabled: false },
     'minimax-video': { apiKey: '', baseUrl: '', enabled: false },
     'grok-video': { apiKey: '', baseUrl: '', enabled: false },
+    'navy-video': { apiKey: '', baseUrl: '', enabled: false },
   } as Record<VideoProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
 
@@ -455,6 +464,28 @@ function ensureBuiltInVideoProviders(state: Partial<SettingsState>): void {
       state.videoProvidersConfig![providerId] = defaultConfig[providerId];
     }
   });
+}
+
+function ensureBuiltInAudioProviders(state: Partial<SettingsState>): void {
+  if (state.ttsProvidersConfig) {
+    const defaultTTSConfig = getDefaultAudioConfig().ttsProvidersConfig;
+    Object.keys(TTS_PROVIDERS).forEach((pid) => {
+      const providerId = pid as TTSProviderId;
+      if (!state.ttsProvidersConfig![providerId]) {
+        state.ttsProvidersConfig![providerId] = defaultTTSConfig[providerId];
+      }
+    });
+  }
+
+  if (state.asrProvidersConfig) {
+    const defaultASRConfig = getDefaultAudioConfig().asrProvidersConfig;
+    Object.keys(ASR_PROVIDERS).forEach((pid) => {
+      const providerId = pid as ASRProviderId;
+      if (!state.asrProvidersConfig![providerId]) {
+        state.asrProvidersConfig![providerId] = defaultASRConfig[providerId];
+      }
+    });
+  }
 }
 
 // Migrate from old localStorage format
@@ -623,11 +654,22 @@ export const useSettingsStore = create<SettingsState>()(
         // Audio actions
         setTTSProvider: (providerId) =>
           set((state) => {
-            // If switching provider, set default voice for that provider
-            const shouldUpdateVoice = state.ttsProviderId !== providerId;
+            // If switching provider, set default voice and model for that provider
+            const shouldUpdateProvider = state.ttsProviderId !== providerId;
             return {
               ttsProviderId: providerId,
-              ...(shouldUpdateVoice && { ttsVoice: DEFAULT_TTS_VOICES[providerId] }),
+              ...(shouldUpdateProvider && {
+                ttsVoice: DEFAULT_TTS_VOICES[providerId],
+                ttsProvidersConfig: {
+                  ...state.ttsProvidersConfig,
+                  [providerId]: {
+                    ...state.ttsProvidersConfig[providerId],
+                    ...(DEFAULT_TTS_MODELS[providerId]
+                      ? { modelId: DEFAULT_TTS_MODELS[providerId] }
+                      : {}),
+                  },
+                },
+              }),
             };
           }),
 
@@ -1212,7 +1254,8 @@ export const useSettingsStore = create<SettingsState>()(
         // Ensure providersConfig has all built-in providers (also in merge below)
         ensureBuiltInProviders(state);
 
-        // Ensure image/video configs have all built-in providers
+        // Ensure audio/image/video configs have all built-in providers
+        ensureBuiltInAudioProviders(state);
         ensureBuiltInImageProviders(state);
         ensureBuiltInVideoProviders(state);
 
@@ -1343,6 +1386,7 @@ export const useSettingsStore = create<SettingsState>()(
       merge: (persistedState, currentState) => {
         const merged = { ...currentState, ...(persistedState as object) };
         ensureBuiltInProviders(merged as Partial<SettingsState>);
+        ensureBuiltInAudioProviders(merged as Partial<SettingsState>);
         ensureBuiltInImageProviders(merged as Partial<SettingsState>);
         ensureBuiltInVideoProviders(merged as Partial<SettingsState>);
         ensureValidProviderSelections(merged as Partial<SettingsState>);

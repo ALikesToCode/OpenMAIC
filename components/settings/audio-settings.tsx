@@ -40,6 +40,7 @@ function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => strin
     'doubao-tts': t('settings.providerDoubaoTTS'),
     'elevenlabs-tts': t('settings.providerElevenLabsTTS'),
     'minimax-tts': t('settings.providerMiniMaxTTS'),
+    'navy-tts': t('settings.providerNavyTTS'),
     'browser-native-tts': t('settings.providerBrowserNativeTTS'),
   };
   return names[providerId];
@@ -50,6 +51,7 @@ function getASRProviderName(providerId: ASRProviderId, t: (key: string) => strin
     'openai-whisper': t('settings.providerOpenAIWhisper'),
     'browser-native': t('settings.providerBrowserNative'),
     'qwen-asr': t('settings.providerQwenASR'),
+    'navy-asr': t('settings.providerNavyASR'),
   };
   return names[providerId];
 }
@@ -634,6 +636,7 @@ export function AudioSettings({ onSave }: AudioSettingsProps = {}) {
                 let endpointPath = '';
                 switch (asrProviderId) {
                   case 'openai-whisper':
+                  case 'navy-asr':
                     endpointPath = '/audio/transcriptions';
                     break;
                   case 'qwen-asr':

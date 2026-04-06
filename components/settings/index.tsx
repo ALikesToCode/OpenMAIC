@@ -124,6 +124,7 @@ function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => strin
     'doubao-tts': t('settings.providerDoubaoTTS'),
     'elevenlabs-tts': t('settings.providerElevenLabsTTS'),
     'minimax-tts': t('settings.providerMiniMaxTTS'),
+    'navy-tts': t('settings.providerNavyTTS'),
     'browser-native-tts': t('settings.providerBrowserNativeTTS'),
   };
   return names[providerId];
@@ -134,6 +135,7 @@ function getASRProviderName(providerId: ASRProviderId, t: (key: string) => strin
     'openai-whisper': t('settings.providerOpenAIWhisper'),
     'browser-native': t('settings.providerBrowserNative'),
     'qwen-asr': t('settings.providerQwenASR'),
+    'navy-asr': t('settings.providerNavyASR'),
   };
   return names[providerId];
 }
@@ -145,6 +147,7 @@ const IMAGE_PROVIDER_NAMES: Record<ImageProviderId, string> = {
   'nano-banana': 'providerNanoBanana',
   'minimax-image': 'providerMiniMaxImage',
   'grok-image': 'providerGrokImage',
+  'navy-image': 'providerNavyImage',
 };
 
 const IMAGE_PROVIDER_ICONS: Record<ImageProviderId, string> = {
@@ -153,6 +156,7 @@ const IMAGE_PROVIDER_ICONS: Record<ImageProviderId, string> = {
   'nano-banana': '/logos/gemini.svg',
   'minimax-image': '/logos/minimax.svg',
   'grok-image': '/logos/grok.svg',
+  'navy-image': '/logos/navy.svg',
 };
 
 const VIDEO_PROVIDER_NAMES: Record<VideoProviderId, string> = {
@@ -162,6 +166,7 @@ const VIDEO_PROVIDER_NAMES: Record<VideoProviderId, string> = {
   sora: 'providerSora',
   'minimax-video': 'providerMiniMaxVideo',
   'grok-video': 'providerGrokVideo',
+  'navy-video': 'providerNavyVideo',
 };
 
 const VIDEO_PROVIDER_ICONS: Record<VideoProviderId, string> = {
@@ -171,6 +176,7 @@ const VIDEO_PROVIDER_ICONS: Record<VideoProviderId, string> = {
   sora: '/logos/openai.svg',
   'minimax-video': '/logos/minimax.svg',
   'grok-video': '/logos/grok.svg',
+  'navy-video': '/logos/navy.svg',
 };
 
 interface SettingsDialogProps {

@@ -102,6 +102,7 @@ OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_API_KEY=...
 GROK_API_KEY=xai-...
+NAVY_API_KEY=sk-navy-...
 ```
 
 You can also configure providers via `server-providers.yml`:
@@ -114,7 +115,7 @@ providers:
     apiKey: sk-ant-...
 ```
 
-Supported providers: **OpenAI**, **Anthropic**, **Google Gemini**, **DeepSeek**, **MiniMax**, **Grok (xAI)**, and any OpenAI-compatible API.
+Supported providers: **OpenAI**, **Anthropic**, **Google Gemini**, **DeepSeek**, **MiniMax**, **Grok (xAI)**, **Navy**, and any OpenAI-compatible API.
 
 MiniMax quick examples:
 
@@ -132,6 +133,28 @@ IMAGE_MINIMAX_BASE_URL=https://api.minimaxi.com
 VIDEO_MINIMAX_API_KEY=...
 VIDEO_MINIMAX_BASE_URL=https://api.minimaxi.com
 ```
+
+Navy quick examples:
+
+```env
+NAVY_API_KEY=sk-navy-...
+NAVY_BASE_URL=https://api.navy/v1
+DEFAULT_MODEL=navy:gpt-5
+
+TTS_NAVY_API_KEY=sk-navy-...
+TTS_NAVY_BASE_URL=https://api.navy/v1
+
+ASR_NAVY_API_KEY=sk-navy-...
+ASR_NAVY_BASE_URL=https://api.navy/v1
+
+IMAGE_NAVY_API_KEY=sk-navy-...
+IMAGE_NAVY_BASE_URL=https://api.navy/v1
+
+VIDEO_NAVY_API_KEY=sk-navy-...
+VIDEO_NAVY_BASE_URL=https://api.navy/v1
+```
+
+Navy is a unified proxy for chat, TTS, ASR, image generation, and video generation. OpenMAIC includes built-in Navy support for all of those surfaces, and you can still use custom Navy model IDs if you want to follow the live `/v1/models` catalog.
 
 > **Recommended model:** **Gemini 3 Flash** — best balance of quality and speed. For highest quality (at slower speed), try **Gemini 3.1 Pro**.
 >

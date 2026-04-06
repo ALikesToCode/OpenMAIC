@@ -248,6 +248,9 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
               case 'elevenlabs-tts':
                 endpointPath = '/text-to-speech';
                 break;
+              case 'navy-tts':
+                endpointPath = '/audio/speech';
+                break;
               case 'doubao-tts':
                 endpointPath = '/unidirectional';
                 break;
