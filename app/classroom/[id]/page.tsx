@@ -14,6 +14,7 @@ import { createLogger } from '@/lib/logger';
 import { MediaStageProvider } from '@/lib/contexts/media-stage-context';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
 import { streamSceneOutlines } from '@/lib/generation/scene-outline-stream';
+import { formatAdditionalScenesGeneratedMessage } from '@/lib/generation/scene-extension-message';
 import { PENDING_SCENE_ID } from '@/lib/store/stage';
 import { toast } from 'sonner';
 import type { Scene, Stage as StageData } from '@/lib/types/stage';
@@ -253,7 +254,7 @@ export default function ClassroomDetailPage() {
         });
 
         toast.success(
-          `Generating ${additionalOutlines.length} more scene${additionalOutlines.length === 1 ? '' : 's'}`,
+          formatAdditionalScenesGeneratedMessage(additionalOutlines.length),
         );
       } catch (extensionError) {
         log.error('Failed to extend classroom:', extensionError);

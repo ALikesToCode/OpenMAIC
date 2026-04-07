@@ -45,6 +45,7 @@ import type {
   GenerationCallbacks,
 } from './pipeline-types';
 import { createLogger } from '@/lib/logger';
+import { normalizeOutlineLanguage, resolveOutlineLanguage } from './outline-language';
 const log = createLogger('Generation');
 
 // ==================== Stage 2: Full Scenes (Two-Step) ====================
@@ -162,12 +163,14 @@ export async function generateSceneContent(
   | GeneratedPBLContent
   | null
 > {
+  const normalizedOutline = normalizeOutlineLanguage(outline);
+
   // If outline is interactive but missing interactiveConfig, fall back to slide
-  if (outline.type === 'interactive' && !outline.interactiveConfig) {
+  if (normalizedOutline.type === 'interactive' && !normalizedOutline.interactiveConfig) {
     log.warn(
-      `Interactive outline "${outline.title}" missing interactiveConfig, falling back to slide`,
+      `Interactive outline "${normalizedOutline.title}" missing interactiveConfig, falling back to slide`,
     );
-    const fallbackOutline = { ...outline, type: 'slide' as const };
+    const fallbackOutline = { ...normalizedOutline, type: 'slide' as const };
     return generateSlideContent(
       fallbackOutline,
       aiCall,
@@ -179,10 +182,10 @@ export async function generateSceneContent(
     );
   }
 
-  switch (outline.type) {
+  switch (normalizedOutline.type) {
     case 'slide':
       return generateSlideContent(
-        outline,
+        normalizedOutline,
         aiCall,
         assignedImages,
         imageMapping,
@@ -191,11 +194,15 @@ export async function generateSceneContent(
         agents,
       );
     case 'quiz':
-      return generateQuizContent(outline, aiCall);
+      return generateQuizContent(normalizedOutline, aiCall);
     case 'interactive':
-      return generateInteractiveContent(outline, aiCall, outline.language);
+      return generateInteractiveContent(
+        normalizedOutline,
+        aiCall,
+        resolveOutlineLanguage(normalizedOutline),
+      );
     case 'pbl':
-      return generatePBLSceneContent(outline, languageModel);
+      return generatePBLSceneContent(normalizedOutline, languageModel);
     default:
       return null;
   }
@@ -467,7 +474,7 @@ async function generateSlideContent(
   generatedMediaMapping?: ImageMapping,
   agents?: AgentInfo[],
 ): Promise<GeneratedSlideContent | null> {
-  const lang = outline.language || 'zh-CN';
+  const lang = resolveOutlineLanguage(outline);
 
   // Build assigned images description for the prompt
   let assignedImagesText = '无可用图片，禁止插入任何 image 元素';
@@ -735,7 +742,7 @@ function normalizeQuizAnswer(question: Record<string, unknown>): string[] | unde
 async function generateInteractiveContent(
   outline: SceneOutline,
   aiCall: AICallFn,
-  language: 'zh-CN' | 'en-US' = 'zh-CN',
+  language: 'zh-CN' | 'en-US',
 ): Promise<GeneratedInteractiveContent | null> {
   const config = outline.interactiveConfig!;
 
@@ -917,16 +924,17 @@ export async function generateSceneActions(
   agents?: AgentInfo[],
   userProfile?: string,
 ): Promise<Action[]> {
+  const normalizedOutline = normalizeOutlineLanguage(outline);
   const agentsText = formatAgentsForPrompt(agents);
 
-  if (outline.type === 'slide' && 'elements' in content) {
+  if (normalizedOutline.type === 'slide' && 'elements' in content) {
     // Format element list for AI to select from
     const elementsText = formatElementsForPrompt(content.elements);
 
     const prompts = buildPrompt(PROMPT_IDS.SLIDE_ACTIONS, {
-      title: outline.title,
-      keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
-      description: outline.description,
+      title: normalizedOutline.title,
+      keyPoints: (normalizedOutline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
+      description: normalizedOutline.description,
       elements: elementsText,
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
@@ -934,99 +942,99 @@ export async function generateSceneActions(
     });
 
     if (!prompts) {
-      return generateDefaultSlideActions(outline, content.elements);
+      return generateDefaultSlideActions(normalizedOutline, content.elements);
     }
 
     const response = await aiCall(prompts.system, prompts.user);
-    const actions = parseActionsFromStructuredOutput(response, outline.type);
+    const actions = parseActionsFromStructuredOutput(response, normalizedOutline.type);
 
     if (actions.length > 0) {
       // Validate and fill in Action IDs
       return processActions(actions, content.elements, agents);
     }
 
-    return generateDefaultSlideActions(outline, content.elements);
+    return generateDefaultSlideActions(normalizedOutline, content.elements);
   }
 
-  if (outline.type === 'quiz' && 'questions' in content) {
+  if (normalizedOutline.type === 'quiz' && 'questions' in content) {
     // Format question list for AI reference
     const questionsText = formatQuestionsForPrompt(content.questions);
 
     const prompts = buildPrompt(PROMPT_IDS.QUIZ_ACTIONS, {
-      title: outline.title,
-      keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
-      description: outline.description,
+      title: normalizedOutline.title,
+      keyPoints: (normalizedOutline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
+      description: normalizedOutline.description,
       questions: questionsText,
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
     });
 
     if (!prompts) {
-      return generateDefaultQuizActions(outline);
+      return generateDefaultQuizActions(normalizedOutline);
     }
 
     const response = await aiCall(prompts.system, prompts.user);
-    const actions = parseActionsFromStructuredOutput(response, outline.type);
+    const actions = parseActionsFromStructuredOutput(response, normalizedOutline.type);
 
     if (actions.length > 0) {
       return processActions(actions, [], agents);
     }
 
-    return generateDefaultQuizActions(outline);
+    return generateDefaultQuizActions(normalizedOutline);
   }
 
-  if (outline.type === 'interactive' && 'html' in content) {
-    const config = outline.interactiveConfig;
+  if (normalizedOutline.type === 'interactive' && 'html' in content) {
+    const config = normalizedOutline.interactiveConfig;
     const agentsText = formatAgentsForPrompt(agents);
     const prompts = buildPrompt(PROMPT_IDS.INTERACTIVE_ACTIONS, {
-      title: outline.title,
-      keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
-      description: outline.description,
-      conceptName: config?.conceptName || outline.title,
+      title: normalizedOutline.title,
+      keyPoints: (normalizedOutline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
+      description: normalizedOutline.description,
+      conceptName: config?.conceptName || normalizedOutline.title,
       designIdea: config?.designIdea || '',
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
     });
 
     if (!prompts) {
-      return generateDefaultInteractiveActions(outline);
+      return generateDefaultInteractiveActions(normalizedOutline);
     }
 
     const response = await aiCall(prompts.system, prompts.user);
-    const actions = parseActionsFromStructuredOutput(response, outline.type);
+    const actions = parseActionsFromStructuredOutput(response, normalizedOutline.type);
 
     if (actions.length > 0) {
       return processActions(actions, [], agents);
     }
 
-    return generateDefaultInteractiveActions(outline);
+    return generateDefaultInteractiveActions(normalizedOutline);
   }
 
-  if (outline.type === 'pbl' && 'projectConfig' in content) {
-    const pblConfig = outline.pblConfig;
+  if (normalizedOutline.type === 'pbl' && 'projectConfig' in content) {
+    const pblConfig = normalizedOutline.pblConfig;
     const agentsText = formatAgentsForPrompt(agents);
     const prompts = buildPrompt(PROMPT_IDS.PBL_ACTIONS, {
-      title: outline.title,
-      keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
-      description: outline.description,
-      projectTopic: pblConfig?.projectTopic || outline.title,
-      projectDescription: pblConfig?.projectDescription || outline.description,
+      title: normalizedOutline.title,
+      keyPoints: (normalizedOutline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
+      description: normalizedOutline.description,
+      projectTopic: pblConfig?.projectTopic || normalizedOutline.title,
+      projectDescription: pblConfig?.projectDescription || normalizedOutline.description,
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
     });
 
     if (!prompts) {
-      return generateDefaultPBLActions(outline);
+      return generateDefaultPBLActions(normalizedOutline);
     }
 
     const response = await aiCall(prompts.system, prompts.user);
-    const actions = parseActionsFromStructuredOutput(response, outline.type);
+    const actions = parseActionsFromStructuredOutput(response, normalizedOutline.type);
 
     if (actions.length > 0) {
       return processActions(actions, [], agents);
     }
 
-    return generateDefaultPBLActions(outline);
+    return generateDefaultPBLActions(normalizedOutline);
   }
 
   return [];
@@ -1036,12 +1044,16 @@ export async function generateSceneActions(
  * Generate default PBL Actions (fallback)
  */
 function generateDefaultPBLActions(_outline: SceneOutline): Action[] {
+  const language = resolveOutlineLanguage(_outline);
   return [
     {
       id: `action_${nanoid(8)}`,
       type: 'speech',
-      title: 'PBL 项目介绍',
-      text: '现在让我们开始一个项目式学习活动。请选择你的角色，查看任务看板，开始协作完成项目。',
+      title: language === 'zh-CN' ? 'PBL 项目介绍' : 'Project Briefing',
+      text:
+        language === 'zh-CN'
+          ? '现在让我们开始一个项目式学习活动。请选择你的角色，查看任务看板，开始协作完成项目。'
+          : 'Let’s begin a project-based learning activity. Choose your role, review the task board, and start collaborating on the project.',
     },
   ];
 }
@@ -1142,6 +1154,7 @@ function processActions(actions: Action[], elements: PPTElement[], agents?: Agen
  * Generate default slide Actions (fallback)
  */
 function generateDefaultSlideActions(outline: SceneOutline, elements: PPTElement[]): Action[] {
+  const language = resolveOutlineLanguage(outline);
   const actions: Action[] = [];
 
   // Add spotlight for text elements
@@ -1150,19 +1163,19 @@ function generateDefaultSlideActions(outline: SceneOutline, elements: PPTElement
     actions.push({
       id: `action_${nanoid(8)}`,
       type: 'spotlight',
-      title: '聚焦重点',
+      title: language === 'zh-CN' ? '聚焦重点' : 'Focus Key Point',
       elementId: textElements[0].id,
     });
   }
 
   // Add opening speech based on key points
   const speechText = outline.keyPoints?.length
-    ? outline.keyPoints.join('。') + '。'
+    ? `${outline.keyPoints.join(language === 'zh-CN' ? '。' : '. ')}${language === 'zh-CN' ? '。' : '.'}`
     : outline.description || outline.title;
   actions.push({
     id: `action_${nanoid(8)}`,
     type: 'speech',
-    title: '场景讲解',
+    title: language === 'zh-CN' ? '场景讲解' : 'Scene Explanation',
     text: speechText,
   });
 
@@ -1173,12 +1186,16 @@ function generateDefaultSlideActions(outline: SceneOutline, elements: PPTElement
  * Generate default quiz Actions (fallback)
  */
 function generateDefaultQuizActions(_outline: SceneOutline): Action[] {
+  const language = resolveOutlineLanguage(_outline);
   return [
     {
       id: `action_${nanoid(8)}`,
       type: 'speech',
-      title: '测验引导',
-      text: '现在让我们来做一个小测验，检验一下学习成果。',
+      title: language === 'zh-CN' ? '测验引导' : 'Knowledge Check Guidance',
+      text:
+        language === 'zh-CN'
+          ? '现在让我们来做一个小测验，检验一下学习成果。'
+          : 'Now let’s do a quick quiz to check what we have learned.',
     },
   ];
 }
@@ -1187,12 +1204,16 @@ function generateDefaultQuizActions(_outline: SceneOutline): Action[] {
  * Generate default interactive Actions (fallback)
  */
 function generateDefaultInteractiveActions(_outline: SceneOutline): Action[] {
+  const language = resolveOutlineLanguage(_outline);
   return [
     {
       id: `action_${nanoid(8)}`,
       type: 'speech',
-      title: '交互引导',
-      text: '现在让我们通过交互式可视化来探索这个概念。请尝试操作页面中的元素，观察变化。',
+      title: language === 'zh-CN' ? '交互引导' : 'Interactive Guidance',
+      text:
+        language === 'zh-CN'
+          ? '现在让我们通过交互式可视化来探索这个概念。请尝试操作页面中的元素，观察变化。'
+          : 'Now let’s explore this concept through an interactive visualization. Try manipulating the elements on the page and observe what changes.',
     },
   ];
 }

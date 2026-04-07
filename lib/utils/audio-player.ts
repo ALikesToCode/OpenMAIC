@@ -31,7 +31,60 @@ export class AudioPlayer {
    */
   public async play(audioId: string, audioUrl?: string): Promise<boolean> {
     try {
-      // 1. Try audioUrl first (server-generated TTS)
+      // Prefer locally cached audio over remote URLs. This avoids brittle
+      // server-backed media paths and keeps playback resilient after recovery.
+      const audioRecord = audioId ? await db.audioFiles.get(audioId) : undefined;
+
+      if (audioRecord) {
+        // Stop current playback
+        this.stop();
+
+        const normalizedBlob = await normalizeAudioBlobType(audioRecord.blob, audioRecord.format);
+        if (normalizedBlob !== audioRecord.blob) {
+          void db.audioFiles
+            .put({
+              ...audioRecord,
+              blob: normalizedBlob,
+            })
+            .catch((error) => {
+              log.warn('Failed to repair cached audio blob type:', error);
+            });
+        }
+
+        // Create audio element
+        this.audio = new Audio();
+
+        // Set audio source
+        const blobUrl = URL.createObjectURL(normalizedBlob);
+        this.audio.src = blobUrl;
+        if (this.muted) this.audio.volume = 0;
+        else this.audio.volume = this.volume;
+
+        // Apply playback rate
+        this.audio.defaultPlaybackRate = this.playbackRate;
+        this.audio.playbackRate = this.playbackRate;
+
+        // Set ended callback
+        this.audio.addEventListener('ended', () => {
+          URL.revokeObjectURL(blobUrl);
+          this.onEndedCallback?.();
+        });
+
+        // Play
+        await playMediaSafely(this.audio);
+        // Re-apply after play() — some browsers reset during load
+        this.audio.playbackRate = this.playbackRate;
+        return true;
+      }
+
+      // Classroom-media URLs are backed by server filesystem routes which are
+      // not reliable on the deployed Workers target. Hand control back to the
+      // playback engine so it can regenerate and cache a local clip instead.
+      if (audioUrl?.includes('/api/classroom-media/')) {
+        return false;
+      }
+
+      // Remote URL fallback (e.g. direct provider/data URL)
       if (audioUrl) {
         this.stop();
         this.audio = new Audio();
@@ -48,53 +101,8 @@ export class AudioPlayer {
         return true;
       }
 
-      // 2. Fall back to IndexedDB (client-generated TTS)
-      const audioRecord = await db.audioFiles.get(audioId);
-
-      if (!audioRecord) {
-        // Pre-generated audio does not exist (generation failed), skip silently
-        return false;
-      }
-
-      // Stop current playback
-      this.stop();
-
-      const normalizedBlob = await normalizeAudioBlobType(audioRecord.blob, audioRecord.format);
-      if (normalizedBlob !== audioRecord.blob) {
-        void db.audioFiles
-          .put({
-            ...audioRecord,
-            blob: normalizedBlob,
-          })
-          .catch((error) => {
-            log.warn('Failed to repair cached audio blob type:', error);
-          });
-      }
-
-      // Create audio element
-      this.audio = new Audio();
-
-      // Set audio source
-      const blobUrl = URL.createObjectURL(normalizedBlob);
-      this.audio.src = blobUrl;
-      if (this.muted) this.audio.volume = 0;
-      else this.audio.volume = this.volume;
-
-      // Apply playback rate
-      this.audio.defaultPlaybackRate = this.playbackRate;
-      this.audio.playbackRate = this.playbackRate;
-
-      // Set ended callback
-      this.audio.addEventListener('ended', () => {
-        URL.revokeObjectURL(blobUrl);
-        this.onEndedCallback?.();
-      });
-
-      // Play
-      await playMediaSafely(this.audio);
-      // Re-apply after play() — some browsers reset during load
-      this.audio.playbackRate = this.playbackRate;
-      return true;
+      // Pre-generated audio does not exist (yet), let the engine decide the fallback.
+      return false;
     } catch (error) {
       log.error('Failed to play audio:', error);
       throw error;

@@ -21,6 +21,7 @@ import {
   formatExistingOutlinesForPrompt,
 } from './scene-count-guidance';
 import { createLogger } from '@/lib/logger';
+import { normalizeOutlineLanguage } from './outline-language';
 const log = createLogger('Generation');
 
 /**
@@ -153,12 +154,16 @@ export async function generateSceneOutlinesFromRequirements(
       };
     }
     // Ensure IDs, order, and language
-    const enriched = outlines.map((outline, index) => ({
-      ...outline,
-      id: outline.id || nanoid(),
-      order: index + 1,
-      language: requirements.language,
-    }));
+    const enriched = outlines.map((outline, index) =>
+      normalizeOutlineLanguage(
+        {
+          ...outline,
+          id: outline.id || nanoid(),
+          order: index + 1,
+        },
+        requirements.language,
+      ),
+    );
 
     // Replace sequential gen_img_N/gen_vid_N with globally unique IDs
     const result = uniquifyMediaElementIds(enriched);

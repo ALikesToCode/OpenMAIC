@@ -494,10 +494,11 @@ export class PlaybackEngine {
 
         this.audioPlayer
           .play(speechAction.audioId || '', speechAction.audioUrl)
-          .then((audioStarted) => {
+          .then(async (audioStarted) => {
             if (!audioStarted) {
-              // No pre-generated audio — try browser-native TTS if selected
               const settings = useSettingsStore.getState();
+
+              // No playable clip yet — try browser-native TTS if selected.
               if (
                 settings.ttsEnabled &&
                 settings.ttsProviderId === 'browser-native-tts' &&
@@ -505,9 +506,21 @@ export class PlaybackEngine {
                 window.speechSynthesis
               ) {
                 this.playBrowserTTS(speechAction);
-              } else {
-                scheduleReadingTimer();
+                return;
               }
+
+              if (settings.ttsEnabled && settings.ttsProviderId !== 'browser-native-tts') {
+                try {
+                  const recovered = await this.recoverSpeechAudio(speechAction);
+                  if (recovered) {
+                    return;
+                  }
+                } catch (recoveryError) {
+                  log.error('TTS recovery failed:', recoveryError);
+                }
+              }
+
+              scheduleReadingTimer();
             }
           })
           .catch(async (err) => {

@@ -37,6 +37,7 @@ import type {
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import { normalizeOutlineLanguage } from '@/lib/generation/outline-language';
 const log = createLogger('Outlines Stream');
 
 export const maxDuration = 300;
@@ -294,11 +295,11 @@ export async function POST(req: NextRequest) {
                 const newOutlines = extractNewOutlines(fullText, parsedOutlines.length);
                 for (const outline of newOutlines) {
                   // Ensure ID and order
-                  const enriched = {
+                  const enriched = normalizeOutlineLanguage({
                     ...outline,
                     id: outline.id || nanoid(),
                     order: existingOutlines.length + parsedOutlines.length + 1,
-                  };
+                  }, requirements.language);
                   parsedOutlines.push(enriched);
 
                   const event = JSON.stringify({

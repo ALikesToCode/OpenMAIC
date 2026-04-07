@@ -1,4 +1,5 @@
 import type { SceneOutline } from '@/lib/types/generation';
+import { createLogger } from '@/lib/logger';
 
 interface StreamSceneOutlinesParams {
   body: Record<string, unknown>;
@@ -12,6 +13,8 @@ interface StreamSceneOutlinesParams {
 interface ErrorResponsePayload {
   error?: string;
 }
+
+const log = createLogger('SceneOutlineStream');
 
 export async function streamSceneOutlines({
   body,
@@ -54,11 +57,22 @@ export async function streamSceneOutlines({
 
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
-        const event = JSON.parse(line.slice(6)) as
+        let event:
           | { type: 'outline'; data: SceneOutline }
           | { type: 'retry' }
           | { type: 'done'; outlines?: SceneOutline[] }
           | { type: 'error'; error?: string };
+
+        try {
+          event = JSON.parse(line.slice(6)) as
+            | { type: 'outline'; data: SceneOutline }
+            | { type: 'retry' }
+            | { type: 'done'; outlines?: SceneOutline[] }
+            | { type: 'error'; error?: string };
+        } catch (parseError) {
+          log.warn('[Outline SSE] Parse error:', parseError);
+          continue;
+        }
 
         if (event.type === 'outline') {
           collected.push(event.data);
