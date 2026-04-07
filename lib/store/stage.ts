@@ -67,6 +67,7 @@ interface StageState {
 
   // Actions
   setStage: (stage: Stage) => void;
+  updateStage: (updates: Partial<Stage>) => void;
   setScenes: (scenes: Scene[]) => void;
   addScene: (scene: Scene) => void;
   updateScene: (sceneId: string, updates: Partial<Scene>) => void;
@@ -119,6 +120,13 @@ const useStageStoreBase = create<StageState>()((set, get) => ({
       chats: [],
       generationEpoch: s.generationEpoch + 1,
     }));
+    debouncedSave();
+  },
+
+  updateStage: (updates) => {
+    const stage = get().stage;
+    if (!stage) return;
+    set({ stage: { ...stage, ...updates } });
     debouncedSave();
   },
 

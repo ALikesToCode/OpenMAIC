@@ -95,6 +95,7 @@
 import type { TTSModelConfig } from './types';
 import { TTS_PROVIDERS } from './constants';
 import { resolveTTSModelId, resolveTTSVoiceId } from './tts-model-utils';
+import { inferAudioFormatFromBytes, inferAudioFormatFromContentType } from './audio-format';
 
 /**
  * Result of TTS generation
@@ -256,9 +257,15 @@ async function generateNavyTTS(config: TTSModelConfig, text: string): Promise<TT
   }
 
   const arrayBuffer = await response.arrayBuffer();
+  const audioBytes = new Uint8Array(arrayBuffer);
+  const actualFormat =
+    inferAudioFormatFromContentType(response.headers.get('content-type')) ||
+    inferAudioFormatFromBytes(audioBytes) ||
+    requestedFormat;
+
   return {
-    audio: new Uint8Array(arrayBuffer),
-    format: requestedFormat,
+    audio: audioBytes,
+    format: actualFormat,
   };
 }
 

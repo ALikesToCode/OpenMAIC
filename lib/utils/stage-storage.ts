@@ -48,6 +48,7 @@ export async function saveStageData(stageId: string, data: StageStoreData): Prom
       style: data.stage.style,
       currentSceneId: data.currentSceneId || undefined,
       agentIds: data.stage.agentIds,
+      generationContext: data.stage.generationContext,
     });
 
     // Delete old scenes first to avoid orphaned data

@@ -16,6 +16,10 @@ import { formatImageDescription, formatImagePlaceholder } from './prompt-formatt
 import { parseJsonResponse } from './json-repair';
 import { uniquifyMediaElementIds } from './scene-builder';
 import type { AICallFn, GenerationResult, GenerationCallbacks } from './pipeline-types';
+import {
+  buildSceneCountGuidance,
+  formatExistingOutlinesForPrompt,
+} from './scene-count-guidance';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
@@ -36,6 +40,8 @@ export async function generateSceneOutlinesFromRequirements(
     videoGenerationEnabled?: boolean;
     researchContext?: string;
     teacherContext?: string;
+    existingOutlines?: SceneOutline[];
+    additionalSceneCountTarget?: number;
   },
 ): Promise<GenerationResult<SceneOutline[]>> {
   // Build available images description for the prompt
@@ -111,6 +117,16 @@ export async function generateSceneOutlinesFromRequirements(
       options?.researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
     // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
     teacherContext: options?.teacherContext || '',
+    sceneCountGuidance: buildSceneCountGuidance({
+      requirement: requirements.requirement,
+      sceneCountTarget: requirements.sceneCountTarget,
+      pdfPageCount: requirements.sourcePdfPageCount,
+      pdfTextLength: pdfText?.length,
+      researchContextLength: options?.researchContext?.length,
+      existingSceneCount: options?.existingOutlines?.length,
+      additionalSceneCountTarget: options?.additionalSceneCountTarget,
+    }),
+    existingCourseContext: formatExistingOutlinesForPrompt(options?.existingOutlines),
   });
 
   if (!prompts) {

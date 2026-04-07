@@ -38,8 +38,9 @@ export interface Stage {
     persona: string;
     avatar: string;
     color: string;
-    priority: number;
+      priority: number;
   }>;
+  generationContext?: import('./generation').OutlineGenerationContext;
 }
 
 /**

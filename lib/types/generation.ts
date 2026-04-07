@@ -68,6 +68,24 @@ export interface UserRequirements {
   userNickname?: string; // Student nickname for personalization
   userBio?: string; // Student background for personalization
   webSearch?: boolean; // Enable web search for richer context
+  sceneCountTarget?: number; // User-requested full-course scene target
+  sourcePdfPageCount?: number; // Parsed PDF page count to help scene sizing
+}
+
+export interface GenerationContextAgent {
+  id: string;
+  name: string;
+  role: string;
+  persona?: string;
+}
+
+export interface OutlineGenerationContext {
+  requirements: UserRequirements;
+  pdfText?: string;
+  pdfImages?: PdfImage[];
+  researchContext?: string;
+  agents?: GenerationContextAgent[];
+  userProfile?: string;
 }
 
 /**

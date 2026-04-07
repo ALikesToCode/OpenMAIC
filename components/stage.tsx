@@ -18,6 +18,7 @@ import { useDiscussionTTS } from '@/lib/hooks/use-discussion-tts';
 import type { AudioIndicatorState } from '@/components/roundtable/audio-indicator';
 import type { Action, DiscussionAction, SpeechAction } from '@/lib/types/action';
 import { cn } from '@/lib/utils';
+import { inferAutomaticExtensionSceneTarget } from '@/lib/generation/scene-count-guidance';
 // Playback state persistence removed — refresh always starts from the beginning
 import { ChatArea, type ChatAreaRef } from '@/components/chat/chat-area';
 import { agentsToParticipants, useAgentRegistry } from '@/lib/orchestration/registry/store';
@@ -42,12 +43,23 @@ import { VisuallyHidden } from 'radix-ui';
  */
 export function Stage({
   onRetryOutline,
+  onGenerateMoreScenes,
+  isGeneratingMoreScenes = false,
 }: {
   onRetryOutline?: (outlineId: string) => Promise<void>;
+  onGenerateMoreScenes?: (sceneCountTarget?: number) => Promise<void>;
+  isGeneratingMoreScenes?: boolean;
 }) {
   const { t } = useI18n();
-  const { mode, getCurrentScene, scenes, currentSceneId, setCurrentSceneId, generatingOutlines } =
-    useStageStore();
+  const {
+    mode,
+    getCurrentScene,
+    scenes,
+    currentSceneId,
+    setCurrentSceneId,
+    generatingOutlines,
+    stage,
+  } = useStageStore();
   const failedOutlines = useStageStore.use.failedOutlines();
 
   const currentScene = getCurrentScene();
@@ -101,6 +113,7 @@ export function Stage({
   const [isPresenting, setIsPresenting] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isPresentationInteractionActive, setIsPresentationInteractionActive] = useState(false);
+  const [extendSceneCountInput, setExtendSceneCountInput] = useState('');
 
   // Whiteboard state (from canvas store so AI tools can open it)
   const whiteboardOpen = useCanvasStore.use.whiteboardOpen();
@@ -762,6 +775,24 @@ export function Stage({
     ? scenes.length
     : scenes.findIndex((s) => s.id === currentSceneId);
   const totalScenesCount = scenes.length + (hasNextPending ? 1 : 0);
+  const suggestedAdditionalScenes = useMemo(
+    () =>
+      inferAutomaticExtensionSceneTarget({
+        existingSceneCount: scenes.length,
+        requirement: stage?.generationContext?.requirements.requirement,
+        pdfPageCount: stage?.generationContext?.requirements.sourcePdfPageCount,
+        pdfTextLength: stage?.generationContext?.pdfText?.length,
+        researchContextLength: stage?.generationContext?.researchContext?.length,
+      }),
+    [scenes.length, stage?.generationContext],
+  );
+  const canExtendScenes =
+    !!onGenerateMoreScenes &&
+    !!stage?.generationContext &&
+    playbackCompleted &&
+    !isPendingScene &&
+    currentSceneIndex === scenes.length - 1 &&
+    !hasNextPending;
 
   // get action information
   const totalActions = currentScene?.actions?.length || 0;
@@ -987,6 +1018,71 @@ export function Stage({
                 : undefined
             }
           />
+          {canExtendScenes && (
+            <div className="absolute bottom-4 right-4 z-30 w-[min(26rem,calc(100%-2rem))] rounded-2xl border border-border/60 bg-background/92 p-4 shadow-2xl shadow-black/10 backdrop-blur-xl">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">
+                  {t('stage.extendClassroomTitle')}
+                </p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t('stage.extendClassroomDescription')}
+                </p>
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  disabled={isGeneratingMoreScenes}
+                  onClick={() => void onGenerateMoreScenes?.()}
+                  className={cn(
+                    'h-9 rounded-lg px-3 text-xs font-medium transition-colors',
+                    isGeneratingMoreScenes
+                      ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                      : 'bg-primary text-primary-foreground hover:opacity-90',
+                  )}
+                >
+                  {isGeneratingMoreScenes
+                    ? t('stage.generatingMoreScenes')
+                    : t('stage.extendClassroomAuto', { count: suggestedAdditionalScenes })}
+                </button>
+                <div className="flex flex-1 items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={36}
+                    inputMode="numeric"
+                    value={extendSceneCountInput}
+                    onChange={(event) => setExtendSceneCountInput(event.target.value)}
+                    placeholder={String(suggestedAdditionalScenes)}
+                    className="h-9 w-24 rounded-lg border border-border/60 bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                  />
+                  <button
+                    type="button"
+                    disabled={
+                      isGeneratingMoreScenes ||
+                      !extendSceneCountInput.trim() ||
+                      Number.parseInt(extendSceneCountInput, 10) < 1
+                    }
+                    onClick={() => {
+                      const parsed = Number.parseInt(extendSceneCountInput, 10);
+                      if (!Number.isFinite(parsed) || parsed < 1) return;
+                      void onGenerateMoreScenes?.(parsed);
+                      setExtendSceneCountInput('');
+                    }}
+                    className={cn(
+                      'h-9 flex-1 rounded-lg border px-3 text-xs font-medium transition-colors',
+                      isGeneratingMoreScenes ||
+                        !extendSceneCountInput.trim() ||
+                        Number.parseInt(extendSceneCountInput, 10) < 1
+                        ? 'border-border/40 text-muted-foreground cursor-not-allowed'
+                        : 'border-border/60 text-foreground hover:bg-muted/70',
+                    )}
+                  >
+                    {t('stage.extendClassroomCustom')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Roundtable Area */}

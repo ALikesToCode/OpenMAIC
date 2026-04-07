@@ -118,7 +118,12 @@
     "confirmSwitchMessage": "A topic is currently in progress. Switching scenes will end the current topic. Are you sure?",
     "generatingNextPage": "Scene is being generated, please wait...",
     "fullscreen": "Fullscreen",
-    "exitFullscreen": "Exit Fullscreen"
+    "exitFullscreen": "Exit Fullscreen",
+    "extendClassroomTitle": "Need more scenes?",
+    "extendClassroomDescription": "You reached the current end of the classroom. Continue automatically from the remaining material, or request a specific number of extra scenes.",
+    "extendClassroomAuto": "Auto extend (+{{count}} scenes)",
+    "extendClassroomCustom": "Add custom scenes",
+    "generatingMoreScenes": "Generating more scenes..."
   },
   "whiteboard": {
     "title": "Interactive Whiteboard",
@@ -316,7 +321,10 @@
     "outlineGenerateFailed": "Outline generation failed, please try again later",
     "webSearching": "Web Search",
     "webSearchingDesc": "Searching the web for up-to-date information",
-    "webSearchFailed": "Web search failed"
+    "webSearchFailed": "Web search failed",
+    "sceneCountTargetLabel": "Scene target",
+    "sceneCountTargetPlaceholder": "Auto",
+    "sceneCountTargetHint": "Optional. Use a number when you want a fuller or shorter classroom."
   },
   "settings": {
     "title": "Settings",

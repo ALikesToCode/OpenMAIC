@@ -35,6 +35,7 @@ import type {
 } from './types';
 import type { AudioPlayer } from '@/lib/utils/audio-player';
 import { ActionEngine } from '@/lib/action/engine';
+import { generateAndStoreTTSAudio } from '@/lib/audio/client-tts';
 import { useCanvasStore } from '@/lib/store/canvas';
 import { useSettingsStore } from '@/lib/store/settings';
 import { createLogger } from '@/lib/logger';
@@ -82,6 +83,7 @@ export class PlaybackEngine {
   private browserTTSChunkIndex: number = 0; // current chunk being spoken
   private browserTTSPausedChunks: string[] = []; // remaining chunks saved on pause (for cancel+re-speak)
   private speechTimerRemaining: number = 0; // remaining ms (set on pause)
+  private regeneratedAudioIds: Set<string> = new Set();
 
   constructor(
     scenes: Scene[],
@@ -508,8 +510,18 @@ export class PlaybackEngine {
               }
             }
           })
-          .catch((err) => {
+          .catch(async (err) => {
             log.error('TTS error:', err);
+
+            try {
+              const recovered = await this.recoverSpeechAudio(speechAction);
+              if (recovered) {
+                return;
+              }
+            } catch (recoveryError) {
+              log.error('TTS recovery failed:', recoveryError);
+            }
+
             scheduleReadingTimer();
           });
         break;
@@ -592,6 +604,29 @@ export class PlaybackEngine {
         this.processNext();
         break;
     }
+  }
+
+  private async recoverSpeechAudio(speechAction: SpeechAction): Promise<boolean> {
+    const settings = useSettingsStore.getState();
+    if (!settings.ttsEnabled || settings.ttsProviderId === 'browser-native-tts') {
+      return false;
+    }
+
+    const audioId = speechAction.audioId || `tts_${speechAction.id}`;
+    if (this.regeneratedAudioIds.has(audioId)) {
+      return false;
+    }
+
+    this.regeneratedAudioIds.add(audioId);
+    speechAction.audioId = audioId;
+
+    await generateAndStoreTTSAudio(audioId, speechAction.text);
+
+    // Prefer the repaired local clip over any stale remote audio URL.
+    speechAction.audioUrl = undefined;
+
+    const recovered = await this.audioPlayer.play(audioId);
+    return recovered;
   }
 
   // ==================== Browser Native TTS ====================

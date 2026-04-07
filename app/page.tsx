@@ -69,6 +69,7 @@ interface FormState {
   requirement: string;
   language: 'zh-CN' | 'en-US';
   webSearch: boolean;
+  sceneCountTarget: string;
 }
 
 const initialFormState: FormState = {
@@ -76,6 +77,7 @@ const initialFormState: FormState = {
   requirement: '',
   language: 'zh-CN',
   webSearch: false,
+  sceneCountTarget: '',
 };
 
 function HomePage() {
@@ -281,6 +283,10 @@ function HomePage() {
         userNickname: userProfile.nickname || undefined,
         userBio: userProfile.bio || undefined,
         webSearch: form.webSearch || undefined,
+        sceneCountTarget:
+          form.sceneCountTarget.trim().length > 0
+            ? Number.parseInt(form.sceneCountTarget, 10) || undefined
+            : undefined,
       };
 
       let pdfText = '';
@@ -522,19 +528,43 @@ function HomePage() {
             {/* Toolbar row */}
             <div className="px-3 pb-3 flex items-end gap-2">
               <div className="flex-1 min-w-0">
-                <GenerationToolbar
-                  language={form.language}
-                  onLanguageChange={(lang) => updateForm('language', lang)}
-                  webSearch={form.webSearch}
-                  onWebSearchChange={(v) => updateForm('webSearch', v)}
-                  onSettingsOpen={(section) => {
-                    setSettingsSection(section);
-                    setSettingsOpen(true);
-                  }}
-                  sourceFiles={form.sourceFiles}
-                  onSourceFilesChange={(files) => updateForm('sourceFiles', files)}
-                  onSourceError={setError}
-                />
+                <div className="flex flex-col gap-2">
+                  <GenerationToolbar
+                    language={form.language}
+                    onLanguageChange={(lang) => updateForm('language', lang)}
+                    webSearch={form.webSearch}
+                    onWebSearchChange={(v) => updateForm('webSearch', v)}
+                    onSettingsOpen={(section) => {
+                      setSettingsSection(section);
+                      setSettingsOpen(true);
+                    }}
+                    sourceFiles={form.sourceFiles}
+                    onSourceFilesChange={(files) => updateForm('sourceFiles', files)}
+                    onSourceError={setError}
+                  />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label
+                      htmlFor="scene-count-target"
+                      className="text-[11px] font-medium text-muted-foreground/70"
+                    >
+                      {t('generation.sceneCountTargetLabel')}
+                    </label>
+                    <input
+                      id="scene-count-target"
+                      type="number"
+                      min={4}
+                      max={72}
+                      inputMode="numeric"
+                      value={form.sceneCountTarget}
+                      onChange={(e) => updateForm('sceneCountTarget', e.target.value)}
+                      placeholder={t('generation.sceneCountTargetPlaceholder')}
+                      className="h-8 w-28 rounded-lg border border-border/60 bg-background/70 px-2.5 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                    />
+                    <span className="text-[11px] text-muted-foreground/55">
+                      {t('generation.sceneCountTargetHint')}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Voice input */}

@@ -118,7 +118,12 @@
     "confirmSwitchMessage": "当前话题正在进行中，切换页面将结束当前话题。确定要切换吗？",
     "generatingNextPage": "场景正在生成，请稍候...",
     "fullscreen": "全屏",
-    "exitFullscreen": "退出全屏"
+    "exitFullscreen": "退出全屏",
+    "extendClassroomTitle": "还需要更多场景吗？",
+    "extendClassroomDescription": "你已经到达当前课堂的结尾。可以按剩余材料自动续生成，也可以手动指定新增场景数。",
+    "extendClassroomAuto": "自动续生成（约 +{{count}} 个场景）",
+    "extendClassroomCustom": "新增指定场景数",
+    "generatingMoreScenes": "正在生成更多场景..."
   },
   "whiteboard": {
     "title": "互动白板",
@@ -316,7 +321,10 @@
     "outlineGenerateFailed": "大纲生成失败，请稍后重试",
     "webSearching": "网络搜索",
     "webSearchingDesc": "正在搜索网络获取最新资料",
-    "webSearchFailed": "网络搜索失败"
+    "webSearchFailed": "网络搜索失败",
+    "sceneCountTargetLabel": "场景目标数",
+    "sceneCountTargetPlaceholder": "自动",
+    "sceneCountTargetHint": "可选。想要更完整或更精简的课堂时，填一个目标数。"
   },
   "settings": {
     "title": "设置",

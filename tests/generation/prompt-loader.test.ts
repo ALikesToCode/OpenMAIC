@@ -12,6 +12,8 @@ describe('prompt loader', () => {
       pdfContent: 'Chapter summary',
       availableImages: 'No images available',
       userProfile: '',
+      sceneCountGuidance: 'Target about 18 scenes for the full course.',
+      existingCourseContext: 'None',
       mediaGenerationPolicy: '',
       researchContext: 'None',
       teacherContext: '',
@@ -20,6 +22,7 @@ describe('prompt loader', () => {
     expect(prompt).not.toBeNull();
     expect(prompt?.user).toContain('thermodynamics');
     expect(prompt?.user).toContain('Chapter summary');
+    expect(prompt?.user).toContain('18 scenes');
     expect(prompt?.system).not.toContain('{{snippet:');
   });
 });

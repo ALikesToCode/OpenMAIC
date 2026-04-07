@@ -30,6 +30,8 @@ Based on the user's free-form requirement text, automatically infer course detai
 - **Clear Purpose**: Each scene has a clear teaching function
 - **Logical Flow**: Scenes form a natural teaching progression
 - **Experience Design**: Consider learning experience and emotional response from the student's perspective
+- **Coverage over compression**: For dense PDFs, long syllabi, or explicit scene targets, do not collapse important modules just to fit the short default duration
+- **Continuation mode**: If existing course coverage is provided, generate only new follow-up scenes and avoid duplicating already-covered topics
 
 ---
 

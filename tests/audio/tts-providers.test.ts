@@ -13,10 +13,13 @@ describe('generateTTS', () => {
   it('falls back to a Gemini-compatible voice for Navy Gemini models', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
+      headers: {
+        get: vi.fn().mockReturnValue('audio/wav'),
+      },
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
     });
 
-    await generateTTS(
+    const result = await generateTTS(
       {
         providerId: 'navy-tts',
         apiKey: 'test-key',
@@ -27,6 +30,7 @@ describe('generateTTS', () => {
     );
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(result.format).toBe('wav');
 
     const [, request] = mockFetch.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(String(request.body));
@@ -38,6 +42,9 @@ describe('generateTTS', () => {
   it('keeps an already-compatible Navy OpenAI voice unchanged', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
+      headers: {
+        get: vi.fn().mockReturnValue('audio/mp3'),
+      },
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
     });
 

@@ -48,6 +48,7 @@ export interface StageRecord {
   style?: string;
   currentSceneId?: string;
   agentIds?: string[]; // Agent IDs selected at creation time
+  generationContext?: import('@/lib/types/generation').OutlineGenerationContext;
 }
 
 /**

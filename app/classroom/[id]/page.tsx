@@ -7,11 +7,15 @@ import { loadImageMapping } from '@/lib/utils/image-storage';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useSceneGenerator } from '@/lib/hooks/use-scene-generator';
+import { getGenerationApiHeaders } from '@/lib/hooks/use-scene-generator';
 import { useMediaGenerationStore } from '@/lib/store/media-generation';
 import { useWhiteboardHistoryStore } from '@/lib/store/whiteboard-history';
 import { createLogger } from '@/lib/logger';
 import { MediaStageProvider } from '@/lib/contexts/media-stage-context';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
+import { streamSceneOutlines } from '@/lib/generation/scene-outline-stream';
+import { PENDING_SCENE_ID } from '@/lib/store/stage';
+import { toast } from 'sonner';
 
 const log = createLogger('Classroom');
 
@@ -23,6 +27,7 @@ export default function ClassroomDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isExtending, setIsExtending] = useState(false);
 
   const generationStartedRef = useRef(false);
 
@@ -177,6 +182,82 @@ export default function ClassroomDetailPage() {
     }
   }, [loading, error, generateRemaining]);
 
+  const handleGenerateMoreScenes = useCallback(
+    async (additionalSceneCountTarget?: number) => {
+      if (isExtending) return;
+
+      const state = useStageStore.getState();
+      const { stage, outlines } = state;
+      const generationContext = stage?.generationContext;
+
+      if (!stage || !generationContext || outlines.length === 0) {
+        toast.error('This classroom does not have enough saved source context to extend it.');
+        return;
+      }
+
+      setIsExtending(true);
+
+      try {
+        const storageIds = (generationContext.pdfImages || [])
+          .map((image) => image.storageId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0);
+        const imageMapping = await loadImageMapping(storageIds);
+
+        const additionalOutlines = await streamSceneOutlines({
+          headers: getGenerationApiHeaders(),
+          body: {
+            requirements: generationContext.requirements,
+            pdfText: generationContext.pdfText,
+            pdfImages: generationContext.pdfImages,
+            imageMapping,
+            researchContext: generationContext.researchContext,
+            agents: generationContext.agents,
+            existingOutlines: outlines,
+            extensionRequest:
+              typeof additionalSceneCountTarget === 'number'
+                ? { additionalSceneCountTarget }
+                : undefined,
+          },
+          fallbackErrorMessage: 'Failed to generate more scenes',
+        });
+
+        if (additionalOutlines.length === 0) {
+          throw new Error('No additional scenes were generated');
+        }
+
+        state.setOutlines([...outlines, ...additionalOutlines]);
+        state.setGeneratingOutlines(additionalOutlines);
+        state.setCurrentSceneId(PENDING_SCENE_ID);
+        await state.saveToStorage();
+
+        await generateRemaining({
+          pdfImages: generationContext.pdfImages,
+          imageMapping,
+          stageInfo: {
+            name: stage.name,
+            description: stage.description,
+            language: stage.language,
+            style: stage.style,
+          },
+          agents: generationContext.agents,
+          userProfile: generationContext.userProfile,
+        });
+
+        toast.success(
+          `Generating ${additionalOutlines.length} more scene${additionalOutlines.length === 1 ? '' : 's'}`,
+        );
+      } catch (extensionError) {
+        log.error('Failed to extend classroom:', extensionError);
+        toast.error(
+          extensionError instanceof Error ? extensionError.message : 'Failed to extend classroom',
+        );
+      } finally {
+        setIsExtending(false);
+      }
+    },
+    [generateRemaining, isExtending],
+  );
+
   return (
     <ThemeProvider>
       <MediaStageProvider value={classroomId}>
@@ -204,7 +285,11 @@ export default function ClassroomDetailPage() {
               </div>
             </div>
           ) : (
-            <Stage onRetryOutline={retrySingleOutline} />
+            <Stage
+              onRetryOutline={retrySingleOutline}
+              onGenerateMoreScenes={handleGenerateMoreScenes}
+              isGeneratingMoreScenes={isExtending}
+            />
           )}
         </div>
       </MediaStageProvider>

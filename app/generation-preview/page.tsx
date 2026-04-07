@@ -23,6 +23,7 @@ import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { db } from '@/lib/utils/database';
 import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
 import { getAudioMimeType } from '@/lib/audio/audio-format';
+import { streamSceneOutlines } from '@/lib/generation/scene-outline-stream';
 import { nanoid } from 'nanoid';
 import type { Stage } from '@/lib/types/stage';
 import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generation';
@@ -304,6 +305,10 @@ function GenerationPreviewContent() {
 
         const updatedSession = {
           ...currentSession,
+          requirements: {
+            ...currentSession.requirements,
+            sourcePdfPageCount: totalParsedPdfPages || undefined,
+          },
           sourceDocuments: resolvedDocuments.sourceDocuments,
           pdfText,
           pdfImages,
@@ -566,80 +571,27 @@ function GenerationPreviewContent() {
         setStreamingOutlines([]);
 
         outlines = await new Promise<SceneOutline[]>((resolve, reject) => {
-          const collected: SceneOutline[] = [];
-
-          fetch('/api/generate/scene-outlines-stream', {
-            method: 'POST',
+          streamSceneOutlines({
             headers: getApiHeaders(),
-            body: JSON.stringify({
+            body: {
               requirements: currentSession.requirements,
               pdfText: currentSession.pdfText,
               pdfImages: currentSession.pdfImages,
               imageMapping,
               researchContext: currentSession.researchContext,
               agents,
-            }),
+            },
             signal,
+            fallbackErrorMessage: t('generation.outlineEmptyResponse'),
+            onOutline: (_outline, allOutlines) => {
+              setStreamingOutlines(allOutlines);
+            },
+            onRetry: () => {
+              setStreamingOutlines([]);
+              setStatusMessage(t('generation.outlineRetrying'));
+            },
           })
-            .then((res) => {
-              if (!res.ok) {
-                return res.json().then((d) => {
-                  reject(new Error(d.error || t('generation.outlineGenerateFailed')));
-                });
-              }
-
-              const reader = res.body?.getReader();
-              if (!reader) {
-                reject(new Error(t('generation.streamNotReadable')));
-                return;
-              }
-
-              const decoder = new TextDecoder();
-              let sseBuffer = '';
-
-              const pump = (): Promise<void> =>
-                reader.read().then(({ done, value }) => {
-                  if (value) {
-                    sseBuffer += decoder.decode(value, { stream: !done });
-                    const lines = sseBuffer.split('\n');
-                    sseBuffer = lines.pop() || '';
-
-                    for (const line of lines) {
-                      if (!line.startsWith('data: ')) continue;
-                      try {
-                        const evt = JSON.parse(line.slice(6));
-                        if (evt.type === 'outline') {
-                          collected.push(evt.data);
-                          setStreamingOutlines([...collected]);
-                        } else if (evt.type === 'retry') {
-                          collected.length = 0;
-                          setStreamingOutlines([]);
-                          setStatusMessage(t('generation.outlineRetrying'));
-                        } else if (evt.type === 'done') {
-                          resolve(evt.outlines || collected);
-                          return;
-                        } else if (evt.type === 'error') {
-                          reject(new Error(evt.error));
-                          return;
-                        }
-                      } catch (e) {
-                        log.error('Failed to parse outline SSE:', line, e);
-                      }
-                    }
-                  }
-                  if (done) {
-                    if (collected.length > 0) {
-                      resolve(collected);
-                    } else {
-                      reject(new Error(t('generation.outlineEmptyResponse')));
-                    }
-                    return;
-                  }
-                  return pump();
-                });
-
-              pump().catch(reject);
-            })
+            .then(resolve)
             .catch(reject);
         });
 
@@ -685,6 +637,15 @@ function GenerationPreviewContent() {
         currentSession.requirements.userNickname || currentSession.requirements.userBio
           ? `Student: ${currentSession.requirements.userNickname || 'Unknown'}${currentSession.requirements.userBio ? ` — ${currentSession.requirements.userBio}` : ''}`
           : undefined;
+
+      stage.generationContext = {
+        requirements: currentSession.requirements,
+        pdfText: currentSession.pdfText,
+        pdfImages: currentSession.pdfImages,
+        researchContext: currentSession.researchContext,
+        agents,
+        userProfile,
+      };
 
       // Generate ONLY the first scene
       store.setGeneratingOutlines(outlines);

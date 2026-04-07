@@ -9,6 +9,7 @@
 import { db } from '@/lib/utils/database';
 import { createLogger } from '@/lib/logger';
 import { playMediaSafely } from '@/lib/audio/media-playback';
+import { normalizeAudioBlobType } from '@/lib/audio/audio-format';
 
 const log = createLogger('AudioPlayer');
 
@@ -58,11 +59,23 @@ export class AudioPlayer {
       // Stop current playback
       this.stop();
 
+      const normalizedBlob = await normalizeAudioBlobType(audioRecord.blob, audioRecord.format);
+      if (normalizedBlob !== audioRecord.blob) {
+        void db.audioFiles
+          .put({
+            ...audioRecord,
+            blob: normalizedBlob,
+          })
+          .catch((error) => {
+            log.warn('Failed to repair cached audio blob type:', error);
+          });
+      }
+
       // Create audio element
       this.audio = new Audio();
 
       // Set audio source
-      const blobUrl = URL.createObjectURL(audioRecord.blob);
+      const blobUrl = URL.createObjectURL(normalizedBlob);
       this.audio.src = blobUrl;
       if (this.muted) this.audio.volume = 0;
       else this.audio.volume = this.volume;

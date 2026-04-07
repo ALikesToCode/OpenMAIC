@@ -354,6 +354,12 @@ export async function generateClassroom(
       color: AGENT_COLOR_PALETTE[i % AGENT_COLOR_PALETTE.length],
       priority: a.role === 'teacher' ? 10 : a.role === 'assistant' ? 7 : 5,
     })),
+    generationContext: {
+      requirements,
+      pdfText,
+      researchContext,
+      agents,
+    },
   };
 
   const store = createInMemoryStore(stage);

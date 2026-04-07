@@ -117,7 +117,12 @@
     "confirmSwitchMessage": "現在トピックが進行中です。シーンを切り替えると、現在のトピックが終了します。よろしいですか？",
     "generatingNextPage": "シーンを生成中です。お待ちください...",
     "fullscreen": "全画面表示",
-    "exitFullscreen": "全画面表示を終了"
+    "exitFullscreen": "全画面表示を終了",
+    "extendClassroomTitle": "さらにシーンが必要ですか？",
+    "extendClassroomDescription": "現在の授業の終点に到達しました。残りの資料から自動で続けるか、追加したいシーン数を指定できます。",
+    "extendClassroomAuto": "自動で延長（約 +{{count}} シーン）",
+    "extendClassroomCustom": "指定数を追加",
+    "generatingMoreScenes": "さらにシーンを生成中..."
   },
   "whiteboard": {
     "title": "インタラクティブホワイトボード",
@@ -313,7 +318,10 @@
     "outlineGenerateFailed": "アウトラインの生成に失敗しました。しばらくしてからお試しください",
     "webSearching": "ウェブ検索",
     "webSearchingDesc": "ウェブで最新情報を検索しています",
-    "webSearchFailed": "ウェブ検索に失敗しました"
+    "webSearchFailed": "ウェブ検索に失敗しました",
+    "sceneCountTargetLabel": "シーン目標数",
+    "sceneCountTargetPlaceholder": "自動",
+    "sceneCountTargetHint": "任意。より詳しい授業や短い授業にしたいときに指定します。"
   },
   "settings": {
     "title": "設定",

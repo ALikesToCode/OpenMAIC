@@ -117,7 +117,12 @@
     "confirmSwitchMessage": "В данный момент идёт обсуждение. Переключение сцены завершит текущую тему. Продолжить?",
     "generatingNextPage": "Сцена генерируется, пожалуйста подождите...",
     "fullscreen": "Полный экран",
-    "exitFullscreen": "Свернуть"
+    "exitFullscreen": "Свернуть",
+    "extendClassroomTitle": "Нужны ещё сцены?",
+    "extendClassroomDescription": "Вы дошли до текущего конца занятия. Можно автоматически продолжить по оставшемуся материалу или указать точное число дополнительных сцен.",
+    "extendClassroomAuto": "Продолжить автоматически (+{{count}} сцен)",
+    "extendClassroomCustom": "Добавить заданное число",
+    "generatingMoreScenes": "Генерация дополнительных сцен..."
   },
   "whiteboard": {
     "title": "Интерактивная доска",
@@ -313,7 +318,10 @@
     "outlineGenerateFailed": "Ошибка генерации структуры, попробуйте позже",
     "webSearching": "Поиск в интернете",
     "webSearchingDesc": "Поиск актуальной информации в сети",
-    "webSearchFailed": "Ошибка веб-поиска"
+    "webSearchFailed": "Ошибка веб-поиска",
+    "sceneCountTargetLabel": "Цель по числу сцен",
+    "sceneCountTargetPlaceholder": "Авто",
+    "sceneCountTargetHint": "Необязательно. Укажите число, если хотите более подробный или более короткий класс."
   },
   "settings": {
     "title": "Настройки",

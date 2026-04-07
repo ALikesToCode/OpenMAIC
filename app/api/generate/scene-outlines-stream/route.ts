@@ -22,6 +22,10 @@ import {
   formatTeacherPersonaForPrompt,
 } from '@/lib/generation/generation-pipeline';
 import type { AgentInfo } from '@/lib/generation/generation-pipeline';
+import {
+  buildSceneCountGuidance,
+  formatExistingOutlinesForPrompt,
+} from '@/lib/generation/scene-count-guidance';
 import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
 import { nanoid } from 'nanoid';
 import type {
@@ -117,7 +121,16 @@ export async function POST(req: NextRequest) {
       imageMapping?: ImageMapping;
       researchContext?: string;
       agents?: AgentInfo[];
+      existingOutlines?: SceneOutline[];
+      extensionRequest?: {
+        additionalSceneCountTarget?: number;
+      };
     };
+    const existingOutlines = Array.isArray(body.existingOutlines) ? body.existingOutlines : [];
+    const extensionRequest =
+      body.extensionRequest && typeof body.extensionRequest === 'object'
+        ? body.extensionRequest
+        : undefined;
     requirementSnippet = requirements?.requirement?.substring(0, 60);
 
     // Detect vision capability
@@ -175,6 +188,16 @@ export async function POST(req: NextRequest) {
 
     // Build teacher context from agents (if available)
     const teacherContext = formatTeacherPersonaForPrompt(agents);
+    const sceneCountGuidance = buildSceneCountGuidance({
+      requirement: requirements.requirement,
+      sceneCountTarget: requirements.sceneCountTarget,
+      pdfPageCount: requirements.sourcePdfPageCount,
+      pdfTextLength: pdfText?.length,
+      researchContextLength: researchContext?.length,
+      existingSceneCount: existingOutlines.length,
+      additionalSceneCountTarget: extensionRequest?.additionalSceneCountTarget,
+    });
+    const existingCourseContext = formatExistingOutlinesForPrompt(existingOutlines);
 
     const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
       requirement: requirements.requirement,
@@ -188,6 +211,8 @@ export async function POST(req: NextRequest) {
       researchContext: researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
       mediaGenerationPolicy,
       teacherContext,
+      sceneCountGuidance,
+      existingCourseContext,
     });
 
     if (!prompts) {
@@ -266,7 +291,7 @@ export async function POST(req: NextRequest) {
                   const enriched = {
                     ...outline,
                     id: outline.id || nanoid(),
-                    order: parsedOutlines.length + 1,
+                    order: existingOutlines.length + parsedOutlines.length + 1,
                   };
                   parsedOutlines.push(enriched);
 
