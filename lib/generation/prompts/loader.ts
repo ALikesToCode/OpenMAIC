@@ -7,6 +7,7 @@
  * - Variable interpolation via {{variable}} syntax
  * - Caching for performance
  */
+/// <reference types="vite/client" />
 
 import type { PromptId, LoadedPrompt, SnippetId } from './types';
 import { createLogger } from '@/lib/logger';
