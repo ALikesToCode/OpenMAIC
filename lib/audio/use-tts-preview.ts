@@ -6,6 +6,7 @@ import {
   isBrowserTTSAbortError,
   playBrowserTTSPreview,
 } from '@/lib/audio/browser-tts-preview';
+import { playMediaSafely } from '@/lib/audio/media-playback';
 
 export interface TTSPreviewOptions {
   text: string;
@@ -141,7 +142,7 @@ export function useTTSPreview() {
             setPreviewing(false);
           }
         };
-        await audio.play();
+        await playMediaSafely(audio);
       } catch (error) {
         if (!isStale()) {
           cancelRef.current = null;

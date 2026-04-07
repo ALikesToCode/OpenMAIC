@@ -1084,28 +1084,27 @@ export function useExportPPTX() {
 
   // Shared guard + state wrapper for export actions
   const withExportGuard = useCallback(
-    (action: () => Promise<void>) => {
+    async (action: () => Promise<void>) => {
       if (exportingRef.current || slides.length === 0) return;
       exportingRef.current = true;
       setExporting(true);
-      setTimeout(async () => {
-        try {
-          await action();
-        } catch (err) {
-          log.error('Export failed:', err);
-          toast.error(t('export.exportFailed'));
-        } finally {
-          exportingRef.current = false;
-          setExporting(false);
-        }
-      }, 100);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      try {
+        await action();
+      } catch (err) {
+        log.error('Export failed:', err);
+        toast.error(t('export.exportFailed'));
+      } finally {
+        exportingRef.current = false;
+        setExporting(false);
+      }
     },
     [slides.length, t],
   );
 
   // ── Export PPTX only ──
-  const exportPPTX = useCallback(() => {
-    withExportGuard(async () => {
+  const exportPPTX = useCallback(async () => {
+    await withExportGuard(async () => {
       const fileName = stage?.name || 'slides';
       const blob = await buildPptxBlob(
         slides,
@@ -1131,8 +1130,8 @@ export function useExportPPTX() {
   ]);
 
   // ── Export Resource Pack (PPTX + interactive HTML pages as ZIP) ──
-  const exportResourcePack = useCallback(() => {
-    withExportGuard(async () => {
+  const exportResourcePack = useCallback(async () => {
+    await withExportGuard(async () => {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
       const fileName = stage?.name || 'slides';

@@ -6,18 +6,21 @@ import type {
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
+import { hasDeferredPdfSourceDocuments } from '@/lib/utils/source-document';
+import type { SourceDocumentInput } from '@/lib/utils/source-document';
 
 // Session state stored in sessionStorage
 export interface GenerationSessionState {
   sessionId: string;
   requirements: UserRequirements;
   pdfText: string;
+  sourceDocuments?: SourceDocumentInput[];
   pdfImages?: PdfImage[];
   imageStorageIds?: string[];
   imageMapping?: ImageMapping;
   sceneOutlines?: SceneOutline[] | null;
   currentStep: 'generating' | 'complete';
-  // PDF deferred parsing fields
+  // Legacy single-PDF deferred parsing fields
   pdfStorageKey?: string;
   pdfFileName?: string;
   pdfProviderId?: string;
@@ -82,7 +85,9 @@ export const ALL_STEPS: GenerationStep[] = [
 
 export const getActiveSteps = (session: GenerationSessionState | null) => {
   return ALL_STEPS.filter((step) => {
-    if (step.id === 'pdf-analysis') return !!session?.pdfStorageKey;
+    if (step.id === 'pdf-analysis') {
+      return hasDeferredPdfSourceDocuments(session?.sourceDocuments) || !!session?.pdfStorageKey;
+    }
     if (step.id === 'web-search') return !!session?.requirements?.webSearch;
     if (step.id === 'agent-generation') return useSettingsStore.getState().agentMode === 'auto';
     return true;

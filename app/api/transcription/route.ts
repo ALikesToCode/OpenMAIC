@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
 import { transcribeAudio } from '@/lib/audio/asr-providers';
-import { resolveASRApiKey, resolveASRBaseUrl } from '@/lib/server/provider-config';
 import type { ASRProviderId } from '@/lib/audio/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
+import { resolveProviderRequestConfig } from '@/lib/server/provider-request-config';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 const log = createLogger('Transcription');
 
@@ -38,16 +38,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const { apiKey: resolvedApiKey, baseUrl: resolvedBaseUrl } = resolveProviderRequestConfig({
+      surface: 'asr',
+      providerId: effectiveProviderId,
+      clientApiKey: apiKey || undefined,
+      clientBaseUrl,
+    });
+
     const config = {
       providerId: effectiveProviderId,
       modelId: modelId || undefined,
       language: language || 'auto',
-      apiKey: clientBaseUrl
-        ? apiKey || ''
-        : resolveASRApiKey(effectiveProviderId, apiKey || undefined),
-      baseUrl: clientBaseUrl
-        ? clientBaseUrl
-        : resolveASRBaseUrl(effectiveProviderId, baseUrl || undefined),
+      apiKey: resolvedApiKey,
+      baseUrl: resolvedBaseUrl,
     };
 
     // Convert audio file to buffer

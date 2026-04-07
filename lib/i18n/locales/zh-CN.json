@@ -14,6 +14,7 @@
     "pdfParser": "解析器",
     "pdfUpload": "上传文件",
     "removePdf": "移除文件",
+    "sourceFileCount": "{{count}} 个文件",
     "webSearchOn": "已开启",
     "webSearchOff": "点击开启",
     "webSearchDesc": "生成前搜索网络获取最新资料，让内容更丰富准确",
@@ -267,16 +268,17 @@
     "renameFailed": "重命名失败"
   },
   "upload": {
-    "pdfSizeLimit": "支持最大50MB的 PDF 和文本文件",
+    "pdfSizeLimit": "支持最多 20 个 PDF 和文本文件，单个文件最大 50MB",
     "generateFailed": "生成课堂失败，请重试",
     "requirementPlaceholder": "输入你想学的任何内容，例如：\n「从零学 Python，30 分钟写出第一个程序」\n「用白板给我讲解傅里叶变换」\n「阿瓦隆桌游怎么玩」",
     "requirementRequired": "请输入课程需求",
     "fileTooLarge": "文件过大，请选择小于50MB的 PDF 或文本文件",
-    "unsupportedFileType": "不支持的文件类型，请上传 PDF 或 .md、.txt 等文本文件"
+    "unsupportedFileType": "不支持的文件类型，请上传 PDF 或 .md、.txt 等文本文件",
+    "tooManyFiles": "文件过多，一次最多上传 {{count}} 个源文档"
   },
   "generation": {
     "analyzingPdf": "解析 PDF 文档",
-    "analyzingPdfDesc": "正在提取文档结构和内容...",
+    "analyzingPdfDesc": "正在并行提取已上传 PDF 的结构和内容...",
     "pdfLoadFailed": "无法加载 PDF 文件，请重试",
     "pdfParseFailed": "PDF 解析失败",
     "streamNotReadable": "无法读取生成数据流",

@@ -8,6 +8,7 @@
 
 import { db } from '@/lib/utils/database';
 import { createLogger } from '@/lib/logger';
+import { playMediaSafely } from '@/lib/audio/media-playback';
 
 const log = createLogger('AudioPlayer');
 
@@ -41,7 +42,7 @@ export class AudioPlayer {
         this.audio.addEventListener('ended', () => {
           this.onEndedCallback?.();
         });
-        await this.audio.play();
+        await playMediaSafely(this.audio);
         this.audio.playbackRate = this.playbackRate;
         return true;
       }
@@ -77,7 +78,7 @@ export class AudioPlayer {
       });
 
       // Play
-      await this.audio.play();
+      await playMediaSafely(this.audio);
       // Re-apply after play() — some browsers reset during load
       this.audio.playbackRate = this.playbackRate;
       return true;
@@ -116,7 +117,7 @@ export class AudioPlayer {
   public resume(): void {
     if (this.audio?.paused) {
       this.audio.playbackRate = this.playbackRate;
-      this.audio.play().catch((error) => {
+      playMediaSafely(this.audio).catch((error) => {
         log.error('Failed to resume audio:', error);
       });
     }

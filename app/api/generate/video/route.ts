@@ -18,10 +18,10 @@
 
 import { NextRequest } from 'next/server';
 import { generateVideo, normalizeVideoOptions } from '@/lib/media/video-providers';
-import { resolveVideoApiKey, resolveVideoBaseUrl } from '@/lib/server/provider-config';
 import type { VideoProviderId, VideoGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
+import { resolveProviderRequestConfig } from '@/lib/server/provider-request-config';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 const log = createLogger('VideoGeneration API');
@@ -48,9 +48,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const apiKey = clientBaseUrl
-      ? clientApiKey || ''
-      : resolveVideoApiKey(providerId, clientApiKey);
+    const { apiKey, baseUrl } = resolveProviderRequestConfig({
+      surface: 'video',
+      providerId,
+      clientApiKey,
+      clientBaseUrl,
+    });
     if (!apiKey) {
       return apiError(
         'MISSING_API_KEY',
@@ -58,8 +61,6 @@ export async function POST(request: NextRequest) {
         `No API key configured for video provider: ${providerId}`,
       );
     }
-
-    const baseUrl = clientBaseUrl ? clientBaseUrl : resolveVideoBaseUrl(providerId, clientBaseUrl);
 
     // Normalize options against provider capabilities
     const options = normalizeVideoOptions(providerId, body);

@@ -14,6 +14,7 @@
     "pdfParser": "Parser",
     "pdfUpload": "Upload file",
     "removePdf": "Remove file",
+    "sourceFileCount": "{{count}} files",
     "webSearchOn": "Enabled",
     "webSearchOff": "Click to enable",
     "webSearchDesc": "Search the web for up-to-date information before generation",
@@ -267,16 +268,17 @@
     "renameFailed": "Failed to rename classroom"
   },
   "upload": {
-    "pdfSizeLimit": "Supports PDF and text files up to 50MB",
+    "pdfSizeLimit": "Supports up to 20 PDF and text files, 50MB each",
     "generateFailed": "Failed to generate classroom, please try again",
     "requirementPlaceholder": "Tell me anything you want to learn, e.g.\n\"Teach me Python from scratch in 30 minutes\"\n\"Explain Fourier Transform on the whiteboard\"\n\"How to play the board game Avalon\"",
     "requirementRequired": "Please enter course requirements",
     "fileTooLarge": "File too large. Please select a PDF or text file smaller than 50MB",
-    "unsupportedFileType": "Unsupported file type. Upload a PDF or a text-based file such as .md or .txt"
+    "unsupportedFileType": "Unsupported file type. Upload a PDF or a text-based file such as .md or .txt",
+    "tooManyFiles": "Too many files. Upload up to {{count}} source documents at a time"
   },
   "generation": {
-    "analyzingPdf": "Analyzing PDF Document",
-    "analyzingPdfDesc": "Extracting document structure and content...",
+    "analyzingPdf": "Analyzing PDF Documents",
+    "analyzingPdfDesc": "Extracting structure and content from uploaded PDFs...",
     "pdfLoadFailed": "Failed to load PDF file, please try again",
     "pdfParseFailed": "PDF parsing failed",
     "streamNotReadable": "Unable to read generation stream",

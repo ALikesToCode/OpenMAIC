@@ -48,6 +48,7 @@ const IMAGE_PROVIDER_ICONS: Record<string, string> = {
   'qwen-image': '/logos/bailian.svg',
   'nano-banana': '/logos/gemini.svg',
   'grok-image': '/logos/grok.svg',
+  'navy-image': '/logos/navy.svg',
 };
 const VIDEO_PROVIDER_ICONS: Record<string, string> = {
   seedance: '/logos/doubao.svg',
@@ -55,6 +56,7 @@ const VIDEO_PROVIDER_ICONS: Record<string, string> = {
   veo: '/logos/gemini.svg',
   sora: '/logos/openai.svg',
   'grok-video': '/logos/grok.svg',
+  'navy-video': '/logos/navy.svg',
 };
 
 type TabId = 'image' | 'video' | 'tts' | 'asr';
@@ -91,6 +93,7 @@ function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => strin
     'doubao-tts': t('settings.providerDoubaoTTS'),
     'elevenlabs-tts': t('settings.providerElevenLabsTTS'),
     'minimax-tts': t('settings.providerMiniMaxTTS'),
+    'navy-tts': t('settings.providerNavyTTS'),
     'browser-native-tts': t('settings.providerBrowserNativeTTS'),
   };
   return names[providerId] || providerId;

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowUp,
@@ -25,7 +26,6 @@ import { createLogger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { Textarea as UITextarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { SettingsDialog } from '@/components/settings';
 import { GenerationToolbar } from '@/components/generation/generation-toolbar';
 import { AgentBar } from '@/components/agent/agent-bar';
 import { useTheme } from '@/lib/hooks/use-theme';
@@ -40,6 +40,7 @@ import {
   renameStage,
   getFirstSlideByStages,
 } from '@/lib/utils/stage-storage';
+import { revokeSlideObjectUrls } from '@/lib/utils/slide-object-urls';
 import { ThumbnailSlide } from '@/components/slide-renderer/components/ThumbnailSlide';
 import type { Slide } from '@/lib/types/slides';
 import { useMediaGenerationStore } from '@/lib/store/media-generation';
@@ -47,7 +48,15 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
-import { prepareSourceDocumentInput, isPdfSourceDocumentFile } from '@/lib/utils/source-document';
+import {
+  buildSourceDocumentText,
+  prepareSourceDocumentInputs,
+} from '@/lib/utils/source-document';
+
+const SettingsDialog = dynamic(
+  () => import('@/components/settings').then((mod) => mod.SettingsDialog),
+  { ssr: false },
+);
 
 const log = createLogger('Home');
 
@@ -56,14 +65,14 @@ const LANGUAGE_STORAGE_KEY = 'generationLanguage';
 const RECENT_OPEN_STORAGE_KEY = 'recentClassroomsOpen';
 
 interface FormState {
-  pdfFile: File | null;
+  sourceFiles: File[];
   requirement: string;
   language: 'zh-CN' | 'en-US';
   webSearch: boolean;
 }
 
 const initialFormState: FormState = {
-  pdfFile: null,
+  sourceFiles: [],
   requirement: '',
   language: 'zh-CN',
   webSearch: false,
@@ -145,6 +154,12 @@ function HomePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [themeOpen]);
 
+  useEffect(() => {
+    return () => {
+      revokeSlideObjectUrls(thumbnails);
+    };
+  }, [thumbnails]);
+
   const loadClassrooms = async () => {
     try {
       const list = await listStages();
@@ -153,6 +168,8 @@ function HomePage() {
       if (list.length > 0) {
         const slides = await getFirstSlideByStages(list.map((c) => c.id));
         setThumbnails(slides);
+      } else {
+        setThumbnails({});
       }
     } catch (err) {
       log.error('Failed to load classrooms:', err);
@@ -266,41 +283,40 @@ function HomePage() {
         webSearch: form.webSearch || undefined,
       };
 
-      let pdfStorageKey: string | undefined;
-      let pdfFileName: string | undefined;
-      let pdfProviderId: string | undefined;
-      let pdfProviderConfig: { apiKey?: string; baseUrl?: string } | undefined;
-
       let pdfText = '';
-      if (form.pdfFile) {
-        const preparedDocument = await prepareSourceDocumentInput(form.pdfFile);
-        pdfText = preparedDocument.pdfText;
-        pdfStorageKey = preparedDocument.pdfStorageKey;
-        pdfFileName = preparedDocument.pdfFileName;
+      let sourceDocuments: Awaited<ReturnType<typeof prepareSourceDocumentInputs>> = [];
+      if (form.sourceFiles.length > 0) {
+        const preparedDocuments = await prepareSourceDocumentInputs(form.sourceFiles);
+        const settings = useSettingsStore.getState();
+        const providerCfg = settings.pdfProvidersConfig?.[settings.pdfProviderId];
 
-        if (isPdfSourceDocumentFile(form.pdfFile)) {
-          const settings = useSettingsStore.getState();
-          pdfProviderId = settings.pdfProviderId;
-          const providerCfg = settings.pdfProvidersConfig?.[settings.pdfProviderId];
-          if (providerCfg) {
-            pdfProviderConfig = {
-              apiKey: providerCfg.apiKey,
-              baseUrl: providerCfg.baseUrl,
-            };
-          }
-        }
+        sourceDocuments = preparedDocuments.map((document) =>
+          document.kind === 'pdf'
+            ? {
+                ...document,
+                providerId: settings.pdfProviderId,
+                providerConfig: providerCfg
+                  ? {
+                      apiKey: providerCfg.apiKey,
+                      baseUrl: providerCfg.baseUrl,
+                    }
+                  : undefined,
+              }
+            : document,
+        );
+
+        pdfText = buildSourceDocumentText(
+          sourceDocuments.filter((document) => document.kind === 'text'),
+        );
       }
 
       const sessionState = {
         sessionId: nanoid(),
         requirements,
         pdfText,
+        sourceDocuments,
         pdfImages: [],
         imageStorageIds: [],
-        pdfStorageKey,
-        pdfFileName,
-        pdfProviderId,
-        pdfProviderConfig,
         sceneOutlines: null,
         currentStep: 'generating' as const,
       };
@@ -418,14 +434,16 @@ function HomePage() {
           </button>
         </div>
       </div>
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={(open) => {
-          setSettingsOpen(open);
-          if (!open) setSettingsSection(undefined);
-        }}
-        initialSection={settingsSection}
-      />
+      {settingsOpen ? (
+        <SettingsDialog
+          open={settingsOpen}
+          onOpenChange={(open) => {
+            setSettingsOpen(open);
+            if (!open) setSettingsSection(undefined);
+          }}
+          initialSection={settingsSection}
+        />
+      ) : null}
 
       {/* ═══ Background Decor ═══ */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -513,9 +531,9 @@ function HomePage() {
                     setSettingsSection(section);
                     setSettingsOpen(true);
                   }}
-                  pdfFile={form.pdfFile}
-                  onPdfFileChange={(f) => updateForm('pdfFile', f)}
-                  onPdfError={setError}
+                  sourceFiles={form.sourceFiles}
+                  onSourceFilesChange={(files) => updateForm('sourceFiles', files)}
+                  onSourceError={setError}
                 />
               </div>
 

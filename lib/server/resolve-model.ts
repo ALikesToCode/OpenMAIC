@@ -7,7 +7,8 @@
 
 import type { NextRequest } from 'next/server';
 import { getModel, parseModelString, type ModelWithInfo } from '@/lib/ai/providers';
-import { resolveApiKey, resolveBaseUrl, resolveProxy } from '@/lib/server/provider-config';
+import { resolveProxy } from '@/lib/server/provider-config';
+import { resolveProviderRequestConfig } from '@/lib/server/provider-request-config';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 export interface ResolvedModel extends ModelWithInfo {
@@ -40,10 +41,12 @@ export function resolveModel(params: {
     }
   }
 
-  const apiKey = clientBaseUrl
-    ? params.apiKey || ''
-    : resolveApiKey(providerId, params.apiKey || '');
-  const baseUrl = clientBaseUrl ? clientBaseUrl : resolveBaseUrl(providerId, params.baseUrl);
+  const { apiKey, baseUrl } = resolveProviderRequestConfig({
+    surface: 'llm',
+    providerId,
+    clientApiKey: params.apiKey || undefined,
+    clientBaseUrl,
+  });
   const proxy = resolveProxy(providerId);
   const { model, modelInfo } = getModel({
     providerId,

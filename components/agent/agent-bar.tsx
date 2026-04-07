@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/lib/store/settings';
 import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import { resolveAgentVoice, getAvailableProvidersWithVoices } from '@/lib/audio/voice-resolver';
 import { playBrowserTTSPreview } from '@/lib/audio/browser-tts-preview';
+import { playMediaSafely } from '@/lib/audio/media-playback';
 import {
   Sparkles,
   ChevronDown,
@@ -125,7 +126,7 @@ function AgentVoicePill({
         previewAudioRef.current = audio;
         audio.addEventListener('ended', () => setPreviewingId(null));
         audio.addEventListener('error', () => setPreviewingId(null));
-        await audio.play();
+        await playMediaSafely(audio);
       } catch {
         setPreviewingId(null);
       }
@@ -348,7 +349,7 @@ function TeacherVoicePill({
         previewAudioRef.current = audio;
         audio.addEventListener('ended', () => setPreviewingId(null));
         audio.addEventListener('error', () => setPreviewingId(null));
-        await audio.play();
+        await playMediaSafely(audio);
       } catch {
         setPreviewingId(null);
       }

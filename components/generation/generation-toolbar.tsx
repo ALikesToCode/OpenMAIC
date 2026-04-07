@@ -24,6 +24,7 @@ import { MediaPopover } from '@/components/generation/media-popover';
 import {
   isPdfSourceDocumentFile,
   isSupportedSourceDocumentFile,
+  MAX_SOURCE_DOCUMENTS,
   SOURCE_DOCUMENT_ACCEPT,
 } from '@/lib/utils/source-document';
 
@@ -38,10 +39,9 @@ export interface GenerationToolbarProps {
   webSearch: boolean;
   onWebSearchChange: (v: boolean) => void;
   onSettingsOpen: (section?: SettingsSection) => void;
-  // PDF
-  pdfFile: File | null;
-  onPdfFileChange: (file: File | null) => void;
-  onPdfError: (error: string | null) => void;
+  sourceFiles: File[];
+  onSourceFilesChange: (files: File[]) => void;
+  onSourceError: (error: string | null) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────
@@ -51,9 +51,9 @@ export function GenerationToolbar({
   webSearch,
   onWebSearchChange,
   onSettingsOpen,
-  pdfFile,
-  onPdfFileChange,
-  onPdfError,
+  sourceFiles,
+  onSourceFilesChange,
+  onSourceError,
 }: GenerationToolbarProps) {
   const { t } = useI18n();
   const currentProviderId = useSettingsStore((s) => s.providerId);
@@ -101,20 +101,41 @@ export function GenerationToolbar({
 
   const currentProviderConfig = providersConfig?.[currentProviderId];
 
-  const isPdfSelected = pdfFile ? isPdfSourceDocumentFile(pdfFile) : true;
+  const hasPdfSelected = sourceFiles.some((file) => isPdfSourceDocumentFile(file));
 
-  // Source document handler
-  const handleFileSelect = (file: File) => {
-    if (!isSupportedSourceDocumentFile(file)) {
-      onPdfError(t('upload.unsupportedFileType'));
+  const validateSourceFiles = (files: File[]) => {
+    if (sourceFiles.length + files.length > MAX_SOURCE_DOCUMENTS) {
+      return t('upload.tooManyFiles', { count: MAX_SOURCE_DOCUMENTS });
+    }
+
+    for (const file of files) {
+      if (!isSupportedSourceDocumentFile(file)) {
+        return t('upload.unsupportedFileType');
+      }
+      if (file.size > MAX_SOURCE_DOCUMENT_SIZE_BYTES) {
+        return t('upload.fileTooLarge');
+      }
+    }
+
+    return null;
+  };
+
+  const appendSourceFiles = (files: File[]) => {
+    if (files.length === 0) return;
+
+    const validationError = validateSourceFiles(files);
+    if (validationError) {
+      onSourceError(validationError);
       return;
     }
-    if (file.size > MAX_SOURCE_DOCUMENT_SIZE_BYTES) {
-      onPdfError(t('upload.fileTooLarge'));
-      return;
-    }
-    onPdfError(null);
-    onPdfFileChange(file);
+
+    onSourceError(null);
+    onSourceFilesChange([...sourceFiles, ...files]);
+  };
+
+  const removeSourceFile = (fileIndex: number) => {
+    onSourceFilesChange(sourceFiles.filter((_, index) => index !== fileIndex));
+    onSourceError(null);
   };
 
   // ─── Pill button helper ─────────────────────────────
@@ -160,16 +181,21 @@ export function GenerationToolbar({
       {/* ── Source document upload popover ── */}
       <Popover>
         <PopoverTrigger asChild>
-          {pdfFile ? (
+          {sourceFiles.length > 0 ? (
             <button className={pillActive}>
               <Paperclip className="size-3.5" />
-              <span className="max-w-[100px] truncate">{pdfFile.name}</span>
+              <span className="max-w-[120px] truncate">
+                {sourceFiles.length === 1
+                  ? sourceFiles[0].name
+                  : t('toolbar.sourceFileCount', { count: sourceFiles.length })}
+              </span>
               <span
                 role="button"
                 className="size-4 rounded-full inline-flex items-center justify-center hover:bg-violet-200 dark:hover:bg-violet-800 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onPdfFileChange(null);
+                  onSourceFilesChange([]);
+                  onSourceError(null);
                 }}
               >
                 <X className="size-2.5" />
@@ -182,7 +208,7 @@ export function GenerationToolbar({
           )}
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-0">
-          {isPdfSelected && (
+          {hasPdfSelected && (
             <div className="flex items-center gap-2 px-3 pt-3 pb-2">
               <span className="text-xs font-medium text-muted-foreground shrink-0">
                 {t('toolbar.pdfParser')}
@@ -226,28 +252,49 @@ export function GenerationToolbar({
               type="file"
               ref={fileInputRef}
               className="hidden"
+              multiple
               accept={SOURCE_DOCUMENT_ACCEPT}
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFileSelect(f);
+                appendSourceFiles(Array.from(e.target.files || []));
                 e.target.value = '';
               }}
             />
-            {pdfFile ? (
+            {sourceFiles.length > 0 ? (
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="size-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
-                    <FileText className="size-4 text-violet-600 dark:text-violet-400" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{pdfFile.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {(pdfFile.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                  </div>
+                <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                  {sourceFiles.map((file, index) => (
+                    <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-2">
+                      <div className="size-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+                        <FileText className="size-4 text-violet-600 dark:text-violet-400" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{file.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeSourceFile(index)}
+                        className="size-7 rounded-md inline-flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
                 <button
-                  onClick={() => onPdfFileChange(null)}
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full rounded-md border border-border/60 px-3 py-2 text-xs font-medium text-left hover:bg-muted/50 transition-colors"
+                >
+                  {t('toolbar.pdfUpload')}
+                </button>
+                <button
+                  onClick={() => {
+                    onSourceFilesChange([]);
+                    onSourceError(null);
+                  }}
                   className="w-full text-xs text-destructive hover:underline text-left"
                 >
                   {t('toolbar.removePdf')}
@@ -270,8 +317,7 @@ export function GenerationToolbar({
                 onDrop={(e) => {
                   e.preventDefault();
                   setIsDragging(false);
-                  const f = e.dataTransfer.files?.[0];
-                  if (f) handleFileSelect(f);
+                  appendSourceFiles(Array.from(e.dataTransfer.files || []));
                 }}
               >
                 <Paperclip className="size-5 text-muted-foreground/50 mb-1.5" />

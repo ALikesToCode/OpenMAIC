@@ -8,6 +8,7 @@ import {
   getAvailableProvidersWithVoices,
   type ResolvedVoice,
 } from '@/lib/audio/voice-resolver';
+import { playMediaSafely } from '@/lib/audio/media-playback';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import type { TTSProviderId } from '@/lib/audio/types';
 import type { AudioIndicatorState } from '@/components/roundtable/audio-indicator';
@@ -201,7 +202,7 @@ export function useDiscussionTTS({ enabled, agents, onAudioStateChange }: Discus
       }
 
       onAudioStateChangeRef.current?.(item.agentId, 'playing');
-      await audio.play();
+      await playMediaSafely(audio);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         console.error('[DiscussionTTS] TTS generation failed:', err);

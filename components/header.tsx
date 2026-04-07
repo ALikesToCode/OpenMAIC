@@ -8,19 +8,24 @@ import {
   ArrowLeft,
   Loader2,
   Download,
-  FileDown,
-  Package,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useTheme } from '@/lib/hooks/use-theme';
 import { LanguageSwitcher } from './language-switcher';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { SettingsDialog } from './settings';
+import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { useStageStore } from '@/lib/store/stage';
 import { useMediaGenerationStore } from '@/lib/store/media-generation';
-import { useExportPPTX } from '@/lib/export/use-export-pptx';
+
+const SettingsDialog = dynamic(() => import('./settings').then((mod) => mod.SettingsDialog), {
+  ssr: false,
+});
+const HeaderExportMenu = dynamic(
+  () => import('./header-export-menu').then((mod) => mod.HeaderExportMenu),
+  { ssr: false },
+);
 
 interface HeaderProps {
   readonly currentSceneTitle: string;
@@ -32,10 +37,8 @@ export function Header({ currentSceneTitle }: HeaderProps) {
   const router = useRouter();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
-
-  // Export
-  const { exporting: isExporting, exportPPTX, exportResourcePack } = useExportPPTX();
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   const scenes = useStageStore((s) => s.scenes);
   const generatingOutlines = useStageStore((s) => s.generatingOutlines);
@@ -201,37 +204,14 @@ export function Header({ currentSceneTitle }: HeaderProps) {
             )}
           </button>
           {exportMenuOpen && (
-            <div className="absolute top-full mt-2 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden z-50 min-w-[200px]">
-              <button
-                onClick={() => {
-                  setExportMenuOpen(false);
-                  exportPPTX();
-                }}
-                className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2.5"
-              >
-                <FileDown className="w-4 h-4 text-gray-400 shrink-0" />
-                <span>{t('export.pptx')}</span>
-              </button>
-              <button
-                onClick={() => {
-                  setExportMenuOpen(false);
-                  exportResourcePack();
-                }}
-                className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2.5"
-              >
-                <Package className="w-4 h-4 text-gray-400 shrink-0" />
-                <div>
-                  <div>{t('export.resourcePack')}</div>
-                  <div className="text-[11px] text-gray-400 dark:text-gray-500">
-                    {t('export.resourcePackDesc')}
-                  </div>
-                </div>
-              </button>
-            </div>
+            <HeaderExportMenu
+              onClose={() => setExportMenuOpen(false)}
+              onExportStateChange={setIsExporting}
+            />
           )}
         </div>
       </header>
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      {settingsOpen ? <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} /> : null}
     </>
   );
 }

@@ -17,10 +17,10 @@
 
 import { NextRequest } from 'next/server';
 import { generateImage, aspectRatioToDimensions } from '@/lib/media/image-providers';
-import { resolveImageApiKey, resolveImageBaseUrl } from '@/lib/server/provider-config';
 import type { ImageProviderId, ImageGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
+import { resolveProviderRequestConfig } from '@/lib/server/provider-request-config';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 const log = createLogger('ImageGeneration API');
@@ -47,9 +47,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const apiKey = clientBaseUrl
-      ? clientApiKey || ''
-      : resolveImageApiKey(providerId, clientApiKey);
+    const { apiKey, baseUrl } = resolveProviderRequestConfig({
+      surface: 'image',
+      providerId,
+      clientApiKey,
+      clientBaseUrl,
+    });
     if (!apiKey) {
       return apiError(
         'MISSING_API_KEY',
@@ -57,8 +60,6 @@ export async function POST(request: NextRequest) {
         `No API key configured for image provider: ${providerId}`,
       );
     }
-
-    const baseUrl = clientBaseUrl ? clientBaseUrl : resolveImageBaseUrl(providerId, clientBaseUrl);
 
     // Resolve dimensions from aspect ratio if not explicitly set
     if (!body.width && !body.height && body.aspectRatio) {
