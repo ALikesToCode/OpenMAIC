@@ -2,14 +2,12 @@
  * Prompt Loader - Loads prompts from markdown files
  *
  * Supports:
- * - Loading prompts from templates/{promptId}/ directory
+ * - Loading prompts from bundled templates/{promptId}/ content
  * - Snippet inclusion via {{snippet:name}} syntax
  * - Variable interpolation via {{variable}} syntax
  * - Caching for performance
  */
 
-import fs from 'fs';
-import path from 'path';
 import type { PromptId, LoadedPrompt, SnippetId } from './types';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('PromptLoader');
@@ -17,13 +15,23 @@ const log = createLogger('PromptLoader');
 // Cache for loaded prompts and snippets
 const promptCache = new Map<string, LoadedPrompt>();
 const snippetCache = new Map<string, string>();
+const templateModules = import.meta.glob('./templates/*/*.md', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+const snippetModules = import.meta.glob('./snippets/*.md', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
 
-/**
- * Get the prompts directory path
- */
-function getPromptsDir(): string {
-  // In Next.js, use process.cwd() for the project root
-  return path.join(process.cwd(), 'lib', 'generation', 'prompts');
+function getBundledSnippet(snippetId: SnippetId): string | null {
+  return snippetModules[`./snippets/${snippetId}.md`] ?? null;
+}
+
+function getBundledTemplate(promptId: PromptId, part: 'system' | 'user'): string | null {
+  return templateModules[`./templates/${promptId}/${part}.md`] ?? null;
 }
 
 /**
@@ -32,17 +40,14 @@ function getPromptsDir(): string {
 export function loadSnippet(snippetId: SnippetId): string {
   const cached = snippetCache.get(snippetId);
   if (cached) return cached;
-
-  const snippetPath = path.join(getPromptsDir(), 'snippets', `${snippetId}.md`);
-
-  try {
-    const content = fs.readFileSync(snippetPath, 'utf-8').trim();
+  const content = getBundledSnippet(snippetId)?.trim();
+  if (content) {
     snippetCache.set(snippetId, content);
     return content;
-  } catch {
-    log.warn(`Snippet not found: ${snippetId}`);
-    return `{{snippet:${snippetId}}}`;
   }
+
+  log.warn(`Snippet not found: ${snippetId}`);
+  return `{{snippet:${snippetId}}}`;
 }
 
 /**
@@ -61,37 +66,21 @@ function processSnippets(template: string): string {
 export function loadPrompt(promptId: PromptId): LoadedPrompt | null {
   const cached = promptCache.get(promptId);
   if (cached) return cached;
-
-  const promptDir = path.join(getPromptsDir(), 'templates', promptId);
-
-  try {
-    // Load system.md
-    const systemPath = path.join(promptDir, 'system.md');
-    let systemPrompt = fs.readFileSync(systemPath, 'utf-8').trim();
-    systemPrompt = processSnippets(systemPrompt);
-
-    // Load user.md (optional, may not exist)
-    const userPath = path.join(promptDir, 'user.md');
-    let userPromptTemplate = '';
-    try {
-      userPromptTemplate = fs.readFileSync(userPath, 'utf-8').trim();
-      userPromptTemplate = processSnippets(userPromptTemplate);
-    } catch {
-      // user.md is optional
-    }
-
-    const loaded: LoadedPrompt = {
-      id: promptId,
-      systemPrompt,
-      userPromptTemplate,
-    };
-
-    promptCache.set(promptId, loaded);
-    return loaded;
-  } catch (error) {
-    log.error(`Failed to load prompt ${promptId}:`, error);
+  const systemSource = getBundledTemplate(promptId, 'system');
+  if (!systemSource) {
+    log.error(`Failed to load prompt ${promptId}: missing system.md`);
     return null;
   }
+
+  const userSource = getBundledTemplate(promptId, 'user') ?? '';
+  const loaded: LoadedPrompt = {
+    id: promptId,
+    systemPrompt: processSnippets(systemSource.trim()),
+    userPromptTemplate: processSnippets(userSource.trim()),
+  };
+
+  promptCache.set(promptId, loaded);
+  return loaded;
 }
 
 /**

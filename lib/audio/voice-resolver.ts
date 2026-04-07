@@ -1,7 +1,7 @@
 import type { TTSProviderId } from '@/lib/audio/types';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import { TTS_PROVIDERS } from '@/lib/audio/constants';
-import { getTTSModelVoiceGroups } from '@/lib/audio/tts-model-utils';
+import { getCompatibleTTSVoices, getTTSModelVoiceGroups } from '@/lib/audio/tts-model-utils';
 
 export interface ResolvedVoice {
   providerId: TTSProviderId;
@@ -29,7 +29,7 @@ export function resolveAgentVoice(
         voiceId: agent.voiceConfig.voiceId,
       };
     }
-    const list = getServerVoiceList(agent.voiceConfig.providerId);
+    const list = getServerVoiceList(agent.voiceConfig.providerId, agent.voiceConfig.modelId);
     if (list.includes(agent.voiceConfig.voiceId)) {
       return {
         providerId: agent.voiceConfig.providerId,
@@ -42,9 +42,12 @@ export function resolveAgentVoice(
   // Fallback: first available provider, deterministic voice
   if (availableProviders.length > 0) {
     const first = availableProviders[0];
+    const firstGroup = first.modelGroups[0];
+    const firstVoices = firstGroup?.voices.length ? firstGroup.voices : first.voices;
     return {
       providerId: first.providerId,
-      voiceId: first.voices[agentIndex % first.voices.length].id,
+      modelId: firstGroup?.modelId || undefined,
+      voiceId: firstVoices[agentIndex % firstVoices.length].id,
     };
   }
 
@@ -55,11 +58,11 @@ export function resolveAgentVoice(
  * Get the list of voice IDs for a TTS provider.
  * For browser-native-tts, returns empty (browser voices are dynamic).
  */
-export function getServerVoiceList(providerId: TTSProviderId): string[] {
+export function getServerVoiceList(providerId: TTSProviderId, modelId?: string): string[] {
   if (providerId === 'browser-native-tts') return [];
   const provider = TTS_PROVIDERS[providerId];
   if (!provider) return [];
-  return provider.voices.map((v) => v.id);
+  return getCompatibleTTSVoices(providerId, modelId).map((voice) => voice.id);
 }
 
 export interface ModelVoiceGroup {

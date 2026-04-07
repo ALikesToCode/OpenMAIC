@@ -12,6 +12,7 @@ const parseWithUnpdfMock = vi.hoisted(() =>
 );
 
 vi.mock('@/lib/pdf/pdf-provider-unpdf', () => ({
+  attachImagesToUnpdfResult: vi.fn(),
   parseWithUnpdf: parseWithUnpdfMock,
 }));
 
@@ -35,7 +36,7 @@ describe('parsePDF', () => {
       pdfBuffer,
     );
 
-    expect(parseWithUnpdfMock).toHaveBeenCalledWith(pdfBuffer);
+    expect(parseWithUnpdfMock).toHaveBeenCalledWith(pdfBuffer, undefined);
     expect(result).toMatchObject({
       text: 'parsed text',
       metadata: {

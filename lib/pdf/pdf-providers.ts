@@ -142,12 +142,18 @@ import type { ParsedPdfContent } from '@/lib/types/pdf';
 import { PDF_PROVIDERS } from './constants';
 import { parseWithMinerUClient } from './mineru-client';
 
+interface ParsePDFOptions {
+  includeImages?: boolean;
+  existingResult?: ParsedPdfContent;
+}
+
 /**
  * Parse PDF using specified provider
  */
 export async function parsePDF(
   config: PDFParserConfig,
   pdfBuffer: Buffer,
+  options: ParsePDFOptions = {},
 ): Promise<ParsedPdfContent> {
   const provider = PDF_PROVIDERS[config.providerId];
   if (!provider) {
@@ -167,8 +173,13 @@ export async function parsePDF(
     case 'unpdf': {
       // Keep the unpdf/pdfjs stack behind a dynamic import so shared imports do not
       // eagerly pull the parser into unrelated modules.
-      const { parseWithUnpdf } = await import('./pdf-provider-unpdf');
-      result = await parseWithUnpdf(pdfBuffer);
+      const { attachImagesToUnpdfResult, parseWithUnpdf } = await import('./pdf-provider-unpdf');
+      result = options.existingResult
+        ? await attachImagesToUnpdfResult(pdfBuffer, options.existingResult)
+        : await parseWithUnpdf(
+            pdfBuffer,
+            options.includeImages === false ? { includeImages: false } : undefined,
+          );
       break;
     }
 

@@ -30,10 +30,11 @@ import { createLogger } from '@/lib/logger';
 import {
   hasDeferredPdfSourceDocuments,
   resolveSourceDocuments,
-  type ParsedSourceDocumentResult,
   type SourceDocumentInput,
 } from '@/lib/utils/source-document';
 import { requestParsedPDF } from '@/lib/pdf/parse-client';
+import { requestRelevantPdfContext } from '@/lib/pdf/context-client';
+import { PDF_AUTO_ROUTE_THRESHOLDS } from '@/lib/pdf/routing';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
 
@@ -251,15 +252,41 @@ function GenerationPreviewContent() {
             return {
               text: parseData.text,
               images: extractParsedPdfImages(parseData),
-            } satisfies ParsedSourceDocumentResult;
+              pageCount: parseData.metadata?.pageCount ?? 0,
+            };
           }),
         );
 
         const resolvedDocuments = resolveSourceDocuments(sourceDocuments, parsedPdfDocuments);
         let pdfText = resolvedDocuments.pdfText;
+        const totalParsedPdfPages = parsedPdfDocuments.reduce(
+          (sum, document) => sum + (document.pageCount || 0),
+          0,
+        );
+        const warnings: string[] = [];
 
-        if (pdfText.length > MAX_PDF_CONTENT_CHARS) {
-          pdfText = pdfText.substring(0, MAX_PDF_CONTENT_CHARS);
+        if (
+          pdfText.length > MAX_PDF_CONTENT_CHARS ||
+          totalParsedPdfPages >= PDF_AUTO_ROUTE_THRESHOLDS.pageCount
+        ) {
+          try {
+            const relevantContext = await requestRelevantPdfContext({
+              requirement: currentSession.requirements.requirement,
+              pdfText,
+              maxChars: MAX_PDF_CONTENT_CHARS,
+              signal,
+            });
+            pdfText = relevantContext.context;
+          } catch (contextError) {
+            log.warn(
+              'Failed to build relevant PDF context, falling back to truncation:',
+              contextError,
+            );
+            if (pdfText.length > MAX_PDF_CONTENT_CHARS) {
+              pdfText = pdfText.substring(0, MAX_PDF_CONTENT_CHARS);
+              warnings.push(t('generation.textTruncated', { n: MAX_PDF_CONTENT_CHARS }));
+            }
+          }
         }
 
         const imageStorageIds = await storeImages(resolvedDocuments.pdfImages);
@@ -289,10 +316,6 @@ function GenerationPreviewContent() {
         sessionStorage.setItem('generationSession', JSON.stringify(updatedSession));
 
         // Truncation warnings
-        const warnings: string[] = [];
-        if (resolvedDocuments.pdfText.length > MAX_PDF_CONTENT_CHARS) {
-          warnings.push(t('generation.textTruncated', { n: MAX_PDF_CONTENT_CHARS }));
-        }
         if (resolvedDocuments.pdfImages.length > MAX_VISION_IMAGES) {
           warnings.push(
             t('generation.imageTruncated', {

@@ -17,6 +17,8 @@ import { formatTeacherPersonaForPrompt } from '@/lib/generation/prompt-formatter
 import { getDefaultAgents } from '@/lib/orchestration/registry/store';
 import { createLogger } from '@/lib/logger';
 import { parseModelString } from '@/lib/ai/providers';
+import { MAX_PDF_CONTENT_CHARS } from '@/lib/constants/generation';
+import { buildRelevantPdfContextServer } from '@/lib/pdf/context-server';
 import { resolveApiKey, resolveWebSearchApiKey } from '@/lib/server/provider-config';
 import { resolveModel } from '@/lib/server/resolve-model';
 import { buildSearchQuery } from '@/lib/server/search-query-builder';
@@ -225,7 +227,20 @@ export async function generateClassroom(
     requirement,
     language: lang,
   };
-  const pdfText = pdfContent?.text || undefined;
+  let pdfText = pdfContent?.text || undefined;
+  if (pdfText && pdfText.length > MAX_PDF_CONTENT_CHARS) {
+    try {
+      const relevantPdfContext = await buildRelevantPdfContextServer({
+        requirement,
+        pdfText,
+        maxChars: MAX_PDF_CONTENT_CHARS,
+      });
+      pdfText = relevantPdfContext.context;
+    } catch (error) {
+      log.warn('Failed to condense long PDF context, falling back to truncation:', error);
+      pdfText = pdfText.slice(0, MAX_PDF_CONTENT_CHARS);
+    }
+  }
 
   // Resolve agents based on agentMode
   let agents: AgentInfo[];

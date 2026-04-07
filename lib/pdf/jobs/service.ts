@@ -1,14 +1,8 @@
-import {
-  type PDFJobRecordWithResult,
-  getCloudflareBindings,
-} from '@/lib/cloudflare/bindings';
+import { type PDFJobRecordWithResult, getCloudflareBindings } from '@/lib/cloudflare/bindings';
 
 import type { QueuePDFJobInput, PDFJobSummary } from '../job-types';
 import { createPDFJobRecord, getPDFJobRecord } from './pdf-job-repository';
-import {
-  getParsedResultArtifact,
-  putSourcePdfArtifact,
-} from './pdf-artifact-store';
+import { getParsedResultArtifact, putSourcePdfArtifact } from './pdf-artifact-store';
 
 export async function queuePDFJob(input: QueuePDFJobInput): Promise<PDFJobSummary> {
   const bindings = await getCloudflareBindings();
@@ -45,6 +39,8 @@ export async function queuePDFJob(input: QueuePDFJobInput): Promise<PDFJobSummar
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        cacheKey: input.cacheKey,
+        contentHash: input.contentHash,
         jobId,
         apiKey: input.apiKey,
         baseUrl: input.baseUrl,

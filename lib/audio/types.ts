@@ -105,6 +105,8 @@ export interface TTSVoiceInfo {
   description?: string;
   /** Model IDs this voice is compatible with. Undefined = all models. */
   compatibleModels?: string[];
+  /** Provider-specific model families this voice is compatible with. */
+  compatibleModelFamilies?: string[];
 }
 
 /**

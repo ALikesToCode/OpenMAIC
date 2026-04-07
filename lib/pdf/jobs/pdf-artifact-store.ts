@@ -9,6 +9,10 @@ function sanitizeFileName(fileName: string): string {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
+function sanitizeObjectKeySegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
 function getExpiryIso(createdAt: string): string {
   const expiry = new Date(createdAt);
   expiry.setUTCDate(expiry.getUTCDate() + RETENTION_DAYS);
@@ -21,6 +25,10 @@ export function buildSourcePdfObjectKey(jobId: string, fileName: string): string
 
 export function buildParsedResultObjectKey(jobId: string): string {
   return `pdf-jobs/${jobId}/result/parsed.json`;
+}
+
+export function buildParsedCacheObjectKey(cacheKey: string): string {
+  return `pdf-cache/${sanitizeObjectKeySegment(cacheKey)}/parsed.json`;
 }
 
 export async function putSourcePdfArtifact(
@@ -53,6 +61,23 @@ export async function putParsedResultArtifact(
     customMetadata: {
       expiresAt: getExpiryIso(createdAt),
       artifactType: 'parsed-result',
+    },
+  });
+  return key;
+}
+
+export async function putParsedCacheArtifact(
+  bucket: R2Bucket,
+  cacheKey: string,
+  result: ParsedPdfContent,
+  createdAt: string,
+): Promise<string> {
+  const key = buildParsedCacheObjectKey(cacheKey);
+  await bucket.put(key, JSON.stringify(result), {
+    httpMetadata: { contentType: 'application/json' },
+    customMetadata: {
+      expiresAt: getExpiryIso(createdAt),
+      artifactType: 'parsed-cache-result',
     },
   });
   return key;

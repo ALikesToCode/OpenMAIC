@@ -99,6 +99,11 @@ vi.mock('@/lib/audio/constants', () => ({
     'openai-tts': 'alloy',
     'browser-native-tts': 'default',
   },
+  DEFAULT_TTS_MODELS: {
+    'openai-tts': 'gpt-4o-mini-tts',
+    'azure-tts': '',
+    'browser-native-tts': '',
+  },
 }));
 
 vi.mock('@/lib/audio/types', () => ({}));

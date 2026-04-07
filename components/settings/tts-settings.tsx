@@ -16,7 +16,12 @@ import { useSettingsStore } from '@/lib/store/settings';
 import { TTS_PROVIDERS, DEFAULT_TTS_VOICES } from '@/lib/audio/constants';
 import type { TTSProviderId } from '@/lib/audio/types';
 import { fetchNavyModelsForSurface, toCustomModelEntries } from '@/lib/navy/model-sync';
-import { getMergedTTSModels, resolveTTSModelId } from '@/lib/audio/tts-model-utils';
+import {
+  getCompatibleTTSVoices,
+  getMergedTTSModels,
+  resolveTTSModelId,
+  resolveTTSVoiceId,
+} from '@/lib/audio/tts-model-utils';
 import { Volume2, Loader2, CheckCircle2, XCircle, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
@@ -35,15 +40,11 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
   const ttsSpeed = useSettingsStore((state) => state.ttsSpeed);
   const ttsProvidersConfig = useSettingsStore((state) => state.ttsProvidersConfig);
   const setTTSProviderConfig = useSettingsStore((state) => state.setTTSProviderConfig);
+  const setTTSVoice = useSettingsStore((state) => state.setTTSVoice);
   const activeProviderId = useSettingsStore((state) => state.ttsProviderId);
 
   // When testing a non-active provider, use that provider's default voice
   // instead of the active provider's voice (which may be incompatible).
-  const effectiveVoice =
-    selectedProviderId === activeProviderId
-      ? ttsVoice
-      : DEFAULT_TTS_VOICES[selectedProviderId] || 'default';
-
   const ttsProvider = TTS_PROVIDERS[selectedProviderId] ?? TTS_PROVIDERS['openai-tts'];
   const isServerConfigured = !!ttsProvidersConfig[selectedProviderId]?.isServerConfigured;
   const currentConfig = ttsProvidersConfig[selectedProviderId];
@@ -59,6 +60,15 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
     selectedProviderId,
     currentConfig?.modelId,
     currentConfig,
+  );
+  const compatibleVoices = useMemo(
+    () => getCompatibleTTSVoices(selectedProviderId, selectedModelId),
+    [selectedProviderId, selectedModelId],
+  );
+  const effectiveVoice = resolveTTSVoiceId(
+    selectedProviderId,
+    selectedModelId,
+    selectedProviderId === activeProviderId ? ttsVoice : DEFAULT_TTS_VOICES[selectedProviderId],
   );
 
   const [showApiKey, setShowApiKey] = useState(false);
@@ -97,6 +107,20 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
     setTestStatus('idle');
     setTestMessage('');
   }, [selectedProviderId, stopPreview]);
+
+  useEffect(() => {
+    if (selectedProviderId !== activeProviderId) return;
+    if (!compatibleVoices.length) return;
+    if (ttsVoice === effectiveVoice) return;
+    setTTSVoice(effectiveVoice);
+  }, [
+    activeProviderId,
+    compatibleVoices,
+    effectiveVoice,
+    selectedProviderId,
+    setTTSVoice,
+    ttsVoice,
+  ]);
 
   const handleTestTTS = async () => {
     if (!testText.trim()) return;
@@ -365,6 +389,24 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
               {allModels.map((model) => (
                 <SelectItem key={model.id} value={model.id}>
                   {model.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {compatibleVoices.length > 0 && (
+        <div className="space-y-2">
+          <Label className="text-sm">{t('settings.ttsVoice')}</Label>
+          <Select value={effectiveVoice} onValueChange={setTTSVoice}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {compatibleVoices.map((voice) => (
+                <SelectItem key={voice.id} value={voice.id}>
+                  {voice.name}
                 </SelectItem>
               ))}
             </SelectContent>

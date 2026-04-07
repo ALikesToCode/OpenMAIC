@@ -146,4 +146,45 @@ describe('requestParsedPDF', () => {
 
     await assertion;
   });
+
+  it('falls back to the generic parse error when MinerU transport disconnects', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            job: {
+              id: 'job_123',
+              status: 'queued',
+            },
+          }),
+          { status: 202 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            job: {
+              id: 'job_123',
+              status: 'failed',
+              errorMessage: 'Network connection lost.',
+            },
+          }),
+        ),
+      );
+
+    const promise = requestParsedPDF({
+      file: createPdfFile(),
+      fetchImpl: fetchMock,
+      fallbackErrorMessage: 'PDF parsing failed',
+      pollIntervalMs: 100,
+    });
+    const assertion = expect(promise).rejects.toThrow('PDF parsing failed');
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    await assertion;
+  });
 });

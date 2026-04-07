@@ -23,6 +23,7 @@ import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
 import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
 import { createLogger } from '@/lib/logger';
+import { resolveTTSVoiceId } from '@/lib/audio/tts-model-utils';
 import { validateProvider, validateModel } from '@/lib/store/settings-validation';
 
 const log = createLogger('Settings');
@@ -657,17 +658,24 @@ export const useSettingsStore = create<SettingsState>()(
           set((state) => {
             // If switching provider, set default voice and model for that provider
             const shouldUpdateProvider = state.ttsProviderId !== providerId;
+            const nextModelId =
+              state.ttsProvidersConfig[providerId]?.modelId ||
+              DEFAULT_TTS_MODELS[providerId] ||
+              TTS_PROVIDERS[providerId]?.defaultModelId ||
+              '';
             return {
               ttsProviderId: providerId,
               ...(shouldUpdateProvider && {
-                ttsVoice: DEFAULT_TTS_VOICES[providerId],
+                ttsVoice: resolveTTSVoiceId(
+                  providerId,
+                  nextModelId,
+                  DEFAULT_TTS_VOICES[providerId],
+                ),
                 ttsProvidersConfig: {
                   ...state.ttsProvidersConfig,
                   [providerId]: {
                     ...state.ttsProvidersConfig[providerId],
-                    ...(DEFAULT_TTS_MODELS[providerId]
-                      ? { modelId: DEFAULT_TTS_MODELS[providerId] }
-                      : {}),
+                    ...(nextModelId ? { modelId: nextModelId } : {}),
                   },
                 },
               }),
@@ -693,15 +701,27 @@ export const useSettingsStore = create<SettingsState>()(
         setASRLanguage: (language) => set({ asrLanguage: language }),
 
         setTTSProviderConfig: (providerId, config) =>
-          set((state) => ({
-            ttsProvidersConfig: {
-              ...state.ttsProvidersConfig,
-              [providerId]: {
-                ...state.ttsProvidersConfig[providerId],
-                ...config,
+          set((state) => {
+            const nextProviderConfig = {
+              ...state.ttsProvidersConfig[providerId],
+              ...config,
+            };
+            const nextModelId =
+              nextProviderConfig.modelId ||
+              DEFAULT_TTS_MODELS[providerId] ||
+              TTS_PROVIDERS[providerId]?.defaultModelId ||
+              '';
+
+            return {
+              ttsProvidersConfig: {
+                ...state.ttsProvidersConfig,
+                [providerId]: nextProviderConfig,
               },
-            },
-          })),
+              ...(state.ttsProviderId === providerId && {
+                ttsVoice: resolveTTSVoiceId(providerId, nextModelId, state.ttsVoice),
+              }),
+            };
+          }),
 
         setASRProviderConfig: (providerId, config) =>
           set((state) => ({
@@ -1071,10 +1091,18 @@ export const useSettingsStore = create<SettingsState>()(
                   ''
                 : '';
 
-              const validTTSVoice =
-                validTTSProvider !== state.ttsProviderId
-                  ? DEFAULT_TTS_VOICES[validTTSProvider as TTSProviderId] || 'default'
-                  : state.ttsVoice;
+              const validTTSVoice = validTTSProvider
+                ? resolveTTSVoiceId(
+                    validTTSProvider as TTSProviderId,
+                    newTTSConfig[validTTSProvider as TTSProviderId]?.modelId ||
+                      DEFAULT_TTS_MODELS[validTTSProvider as TTSProviderId] ||
+                      TTS_PROVIDERS[validTTSProvider as TTSProviderId]?.defaultModelId ||
+                      '',
+                    validTTSProvider !== state.ttsProviderId
+                      ? DEFAULT_TTS_VOICES[validTTSProvider as TTSProviderId] || 'default'
+                      : state.ttsVoice,
+                  )
+                : state.ttsVoice;
 
               // Auto-disable image/video generation when no provider is usable
               const shouldDisableImage = !validImageProvider && state.imageGenerationEnabled;
@@ -1105,7 +1133,14 @@ export const useSettingsStore = create<SettingsState>()(
                   !newTTSConfig[state.ttsProviderId]?.isServerConfigured
                 ) {
                   autoTtsProvider = serverTtsIds[0];
-                  autoTtsVoice = DEFAULT_TTS_VOICES[autoTtsProvider] || 'default';
+                  autoTtsVoice = resolveTTSVoiceId(
+                    autoTtsProvider,
+                    newTTSConfig[autoTtsProvider]?.modelId ||
+                      DEFAULT_TTS_MODELS[autoTtsProvider] ||
+                      TTS_PROVIDERS[autoTtsProvider]?.defaultModelId ||
+                      '',
+                    DEFAULT_TTS_VOICES[autoTtsProvider] || 'default',
+                  );
                 }
 
                 // ASR: select first server provider if current is not server-configured

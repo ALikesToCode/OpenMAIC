@@ -12,6 +12,8 @@ export interface PDFJobSummary {
 }
 
 export interface QueuePDFJobInput {
+  cacheKey: string;
+  contentHash: string;
   pdfBuffer: Buffer;
   fileName: string;
   fileSize: number;

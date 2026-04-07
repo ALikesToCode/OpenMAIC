@@ -1,5 +1,5 @@
 import { TTS_PROVIDERS } from '@/lib/audio/constants';
-import type { TTSProviderId } from '@/lib/audio/types';
+import type { TTSProviderId, TTSVoiceInfo } from '@/lib/audio/types';
 
 export interface TTSCustomModelEntry {
   id: string;
@@ -20,6 +20,40 @@ export interface TTSModelVoiceGroup {
   modelId: string;
   modelName: string;
   voices: Array<{ id: string; name: string }>;
+}
+
+type TTSModelFamily = 'openai' | 'gemini' | 'elevenlabs';
+
+function inferNavyTTSModelFamily(modelId?: string): TTSModelFamily | undefined {
+  if (!modelId) return undefined;
+
+  const normalized = modelId.trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  if (normalized.includes('gemini')) return 'gemini';
+  if (normalized.includes('eleven')) return 'elevenlabs';
+  if (normalized.startsWith('gpt-') || normalized.startsWith('tts-')) return 'openai';
+
+  return undefined;
+}
+
+function isVoiceCompatibleWithModel(
+  providerId: TTSProviderId,
+  voice: TTSVoiceInfo,
+  modelId?: string,
+): boolean {
+  if (!modelId) return true;
+
+  if (voice.compatibleModels?.length) {
+    return voice.compatibleModels.includes(modelId);
+  }
+
+  if (voice.compatibleModelFamilies?.length && providerId === 'navy-tts') {
+    const family = inferNavyTTSModelFamily(modelId);
+    return family ? voice.compatibleModelFamilies.includes(family) : false;
+  }
+
+  return !voice.compatibleModels && !voice.compatibleModelFamilies;
 }
 
 export function getMergedTTSModels(
@@ -79,6 +113,39 @@ export function resolveTTSModelId(
   return availableModels[0]?.id || '';
 }
 
+export function getCompatibleTTSVoices(
+  providerId: TTSProviderId,
+  modelId?: string,
+): Array<{ id: string; name: string }> {
+  const provider = TTS_PROVIDERS[providerId];
+  if (!provider || provider.voices.length === 0) return [];
+
+  return provider.voices
+    .filter((voice) => isVoiceCompatibleWithModel(providerId, voice, modelId))
+    .map((voice) => ({
+      id: voice.id,
+      name: voice.name,
+    }));
+}
+
+export function resolveTTSVoiceId(
+  providerId: TTSProviderId,
+  modelId: string | undefined,
+  currentVoiceId?: string,
+): string {
+  const compatibleVoices = getCompatibleTTSVoices(providerId, modelId);
+
+  if (compatibleVoices.length === 0) {
+    return currentVoiceId || '';
+  }
+
+  if (currentVoiceId && compatibleVoices.some((voice) => voice.id === currentVoiceId)) {
+    return currentVoiceId;
+  }
+
+  return compatibleVoices[0].id;
+}
+
 export function getTTSModelVoiceGroups(
   providerId: TTSProviderId,
   providerConfig?: TTSProviderRuntimeConfig,
@@ -86,10 +153,6 @@ export function getTTSModelVoiceGroups(
   const provider = TTS_PROVIDERS[providerId];
   if (!provider || provider.voices.length === 0) return [];
 
-  const allVoices = provider.voices.map((voice) => ({
-    id: voice.id,
-    name: voice.name,
-  }));
   const models = getMergedTTSModels(providerId, providerConfig);
 
   if (models.length === 0) {
@@ -97,7 +160,7 @@ export function getTTSModelVoiceGroups(
       {
         modelId: '',
         modelName: provider.name,
-        voices: allVoices,
+        voices: getCompatibleTTSVoices(providerId, undefined),
       },
     ];
   }
@@ -105,14 +168,6 @@ export function getTTSModelVoiceGroups(
   return models.map((model) => ({
     modelId: model.id,
     modelName: model.name,
-    voices:
-      model.source === 'custom'
-        ? allVoices
-        : provider.voices
-            .filter((voice) => !voice.compatibleModels || voice.compatibleModels.includes(model.id))
-            .map((voice) => ({
-              id: voice.id,
-              name: voice.name,
-            })),
+    voices: getCompatibleTTSVoices(providerId, model.id),
   }));
 }

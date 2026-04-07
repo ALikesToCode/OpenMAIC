@@ -5,6 +5,9 @@ import { getCloudflareBindings } from '@/lib/cloudflare/bindings';
 import type { MinerUContainer } from './mineru-container';
 
 const log = createLogger('MinerUClient');
+const MINERU_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
+const MINERU_CONTAINER_RESTART_PATH = '/__container/restart';
+const MINERU_CONTAINER_POOL_SIZE = 3;
 
 interface MinerUConfig {
   apiKey?: string;
@@ -42,46 +45,144 @@ function createMinerUHeaders(config: MinerUConfig): Record<string, string> {
   return headers;
 }
 
+function isRecoverableMinerUContainerError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.includes('Network connection lost.') ||
+    error.message.includes('Container suddenly disconnected') ||
+    error.message.includes('There is no Container instance available at this time.')
+  );
+}
+
+function createMinerUTimeoutSignal(timeoutMs: number): {
+  signal: AbortSignal;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => {
+    controller.abort(new Error(`MinerU request timed out after ${timeoutMs / 1000} seconds`));
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    cleanup: () => globalThis.clearTimeout(timeoutId),
+  };
+}
+
+async function restartMinerUContainer(container: {
+  fetch: (request: Request) => Promise<Response>;
+}) {
+  try {
+    await container.fetch(
+      new Request(`http://container${MINERU_CONTAINER_RESTART_PATH}`, {
+        method: 'POST',
+      }),
+    );
+  } catch (error) {
+    log.warn('[MinerU] Failed to restart container after transport error:', error);
+  }
+}
+
+async function fetchMinerUThroughContainer(
+  config: MinerUConfig,
+  pdfBuffer: Buffer,
+  fileName: string,
+): Promise<Record<string, unknown>> {
+  const bindings = await getCloudflareBindings();
+  const { getRandom } = await import('@cloudflare/containers');
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const container = await getRandom<MinerUContainer>(
+      bindings.MINERU_CONTAINER,
+      MINERU_CONTAINER_POOL_SIZE,
+    );
+    const formData = createMinerUFormData(pdfBuffer, fileName);
+    const headers = createMinerUHeaders(config);
+    const { signal, cleanup } = createMinerUTimeoutSignal(MINERU_REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await container.fetch(
+        new Request('http://container/file_parse', {
+          method: 'POST',
+          headers,
+          body: formData,
+          signal,
+        }),
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => response.statusText);
+        throw new Error(`MinerU container error (${response.status}): ${errorText}`);
+      }
+
+      return (await response.json()) as Record<string, unknown>;
+    } catch (error) {
+      if (attempt === 0 && isRecoverableMinerUContainerError(error)) {
+        log.warn('[MinerU] Container transport failed, restarting once before retrying:', error);
+        await restartMinerUContainer(container);
+        continue;
+      }
+
+      if (
+        error instanceof Error &&
+        error.name === 'AbortError' &&
+        signal.aborted &&
+        signal.reason instanceof Error
+      ) {
+        throw signal.reason;
+      }
+
+      throw error;
+    } finally {
+      cleanup();
+    }
+  }
+
+  throw new Error('MinerU container request failed after retry');
+}
+
 async function fetchMinerUResult(
   config: MinerUConfig,
   pdfBuffer: Buffer,
   fileName: string,
 ): Promise<Record<string, unknown>> {
-  const formData = createMinerUFormData(pdfBuffer, fileName);
-  const headers = createMinerUHeaders(config);
-
   if (config.baseUrl) {
-    const response = await fetch(`${config.baseUrl}/file_parse`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
+    const formData = createMinerUFormData(pdfBuffer, fileName);
+    const headers = createMinerUHeaders(config);
+    const { signal, cleanup } = createMinerUTimeoutSignal(MINERU_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${config.baseUrl}/file_parse`, {
+        method: 'POST',
+        headers,
+        body: formData,
+        signal,
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => response.statusText);
-      throw new Error(`MinerU API error (${response.status}): ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => response.statusText);
+        throw new Error(`MinerU API error (${response.status}): ${errorText}`);
+      }
+
+      return (await response.json()) as Record<string, unknown>;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.name === 'AbortError' &&
+        signal.aborted &&
+        signal.reason instanceof Error
+      ) {
+        throw signal.reason;
+      }
+
+      throw error;
+    } finally {
+      cleanup();
     }
-
-    return (await response.json()) as Record<string, unknown>;
   }
-
-  const bindings = await getCloudflareBindings();
-  const { getContainer } = await import('@cloudflare/containers');
-  const container = getContainer<MinerUContainer>(bindings.MINERU_CONTAINER, 'mineru-api');
-  const response = await container.fetch(
-    new Request('http://container/file_parse', {
-      method: 'POST',
-      headers,
-      body: formData,
-    }),
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => response.statusText);
-    throw new Error(`MinerU container error (${response.status}): ${errorText}`);
-  }
-
-  return (await response.json()) as Record<string, unknown>;
+  return fetchMinerUThroughContainer(config, pdfBuffer, fileName);
 }
 
 export async function parseWithMinerUClient(

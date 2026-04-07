@@ -94,6 +94,7 @@
 
 import type { TTSModelConfig } from './types';
 import { TTS_PROVIDERS } from './constants';
+import { resolveTTSModelId, resolveTTSVoiceId } from './tts-model-utils';
 
 /**
  * Result of TTS generation
@@ -137,27 +138,36 @@ export async function generateTTS(
     throw new Error(`API key required for TTS provider: ${config.providerId}`);
   }
 
+  const resolvedModelId =
+    config.modelId || resolveTTSModelId(config.providerId, undefined) || provider.defaultModelId;
+  const resolvedVoice = resolveTTSVoiceId(config.providerId, resolvedModelId, config.voice);
+  const normalizedConfig: TTSModelConfig = {
+    ...config,
+    modelId: resolvedModelId,
+    voice: resolvedVoice,
+  };
+
   switch (config.providerId) {
     case 'openai-tts':
-      return await generateOpenAITTS(config, text);
+      return await generateOpenAITTS(normalizedConfig, text);
 
     case 'azure-tts':
-      return await generateAzureTTS(config, text);
+      return await generateAzureTTS(normalizedConfig, text);
 
     case 'glm-tts':
-      return await generateGLMTTS(config, text);
+      return await generateGLMTTS(normalizedConfig, text);
 
     case 'qwen-tts':
-      return await generateQwenTTS(config, text);
+      return await generateQwenTTS(normalizedConfig, text);
 
     case 'minimax-tts':
-      return await generateMiniMaxTTS(config, text);
+      return await generateMiniMaxTTS(normalizedConfig, text);
     case 'navy-tts':
-      return await generateNavyTTS(config, text);
+      return await generateNavyTTS(normalizedConfig, text);
     case 'doubao-tts':
-      return await generateDoubaoTTS(config, text);
+      return await generateDoubaoTTS(normalizedConfig, text);
     case 'elevenlabs-tts':
-      return await generateElevenLabsTTS(config, text);
+      return await generateElevenLabsTTS(normalizedConfig, text);
 
     case 'browser-native-tts':
       throw new Error(
@@ -194,8 +204,12 @@ async function generateOpenAITTS(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(`OpenAI TTS API error: ${error.error?.message || response.statusText}`);
+    const error = (await response.json().catch(() => ({ error: response.statusText }))) as {
+      error?: { message?: string } | string;
+    };
+    const message =
+      typeof error.error === 'string' ? error.error : (error.error?.message ?? response.statusText);
+    throw new Error(`OpenAI TTS API error: ${message}`);
   }
 
   const arrayBuffer = await response.arrayBuffer();
@@ -365,7 +379,9 @@ async function generateQwenTTS(config: TTSModelConfig, text: string): Promise<TT
     throw new Error(`Qwen TTS API error: ${errorText}`);
   }
 
-  const data = await response.json();
+  const data = (await response.json()) as {
+    output?: { audio?: { url?: string } };
+  };
 
   // Check for audio URL in response
   if (!data.output?.audio?.url) {
@@ -431,7 +447,10 @@ async function generateMiniMaxTTS(
     throw new Error(`MiniMax TTS API error: ${errorText}`);
   }
 
-  const data = await response.json();
+  const data = (await response.json()) as {
+    data?: { audio?: string };
+    extra_info?: { audio_format?: string };
+  };
   const hexAudio = data?.data?.audio;
   if (!hexAudio || typeof hexAudio !== 'string') {
     throw new Error(`MiniMax TTS error: No audio returned. Response: ${JSON.stringify(data)}`);

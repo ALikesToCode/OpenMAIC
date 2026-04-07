@@ -8,32 +8,32 @@
     "bindings": [
       {
         "name": "PDF_JOB_DO",
-        "class_name": "PDFJobDurableObject"
+        "class_name": "PDFJobDurableObject",
       },
       {
         "name": "MINERU_CONTAINER",
-        "class_name": "MinerUContainer"
-      }
-    ]
+        "class_name": "MinerUContainer",
+      },
+    ],
   },
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["PDFJobDurableObject", "MinerUContainer"]
-    }
+      "new_sqlite_classes": ["PDFJobDurableObject", "MinerUContainer"],
+    },
   ],
   "d1_databases": [
     {
       "binding": "PDF_JOBS_DB",
       "database_name": "openmaic-pdf-jobs",
-      "database_id": "d8f98f60-2a71-48ff-8b6e-075ab4759baa"
-    }
+      "database_id": "d8f98f60-2a71-48ff-8b6e-075ab4759baa",
+    },
   ],
   "r2_buckets": [
     {
       "binding": "PDF_JOB_ARTIFACTS",
-      "bucket_name": "openmaic-pdf-artifacts"
-    }
+      "bucket_name": "openmaic-pdf-artifacts",
+    },
   ],
   "containers": [
     {
@@ -42,10 +42,12 @@
       "image_build_context": ".",
       "class_name": "MinerUContainer",
       "instance_type": "standard-4",
-      "max_instances": 1
-    }
+      "max_instances": 3,
+      "rollout_active_grace_period": 0,
+      "rollout_step_percentage": [100],
+    },
   ],
   "assets": {
-    "not_found_handling": "none"
-  }
+    "not_found_handling": "none",
+  },
 }

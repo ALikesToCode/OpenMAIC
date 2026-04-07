@@ -36,7 +36,18 @@ interface RequestParsedPDFInput {
   pollIntervalMs?: number;
 }
 
-function isSuccessResponse(response: ParsePDFResponse): response is ParsePDFDataResponse | ParsePDFJobResponse {
+function isTransientPDFInfraError(message: string): boolean {
+  return (
+    message.includes('Network connection lost.') ||
+    message.includes('Container suddenly disconnected') ||
+    message.includes('There is no Container instance available at this time.') ||
+    message.includes('timed out')
+  );
+}
+
+function isSuccessResponse(
+  response: ParsePDFResponse,
+): response is ParsePDFDataResponse | ParsePDFJobResponse {
   return response.success;
 }
 
@@ -52,16 +63,15 @@ async function readResponseJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
-function getResponseErrorMessage(
-  response: ParsePDFResponse,
-  fallbackErrorMessage: string,
-): string {
+function getResponseErrorMessage(response: ParsePDFResponse, fallbackErrorMessage: string): string {
   if (!isSuccessResponse(response) && response.error) {
-    return response.error;
+    return isTransientPDFInfraError(response.error) ? fallbackErrorMessage : response.error;
   }
 
   if (isJobResponse(response) && response.job.errorMessage) {
-    return response.job.errorMessage;
+    return isTransientPDFInfraError(response.job.errorMessage)
+      ? fallbackErrorMessage
+      : response.job.errorMessage;
   }
 
   return fallbackErrorMessage;
@@ -76,7 +86,9 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
     const onAbort = () => {
       cleanup();
-      reject(signal?.reason instanceof Error ? signal.reason : new DOMException('Aborted', 'AbortError'));
+      reject(
+        signal?.reason instanceof Error ? signal.reason : new DOMException('Aborted', 'AbortError'),
+      );
     };
 
     const cleanup = () => {
@@ -164,11 +176,5 @@ export async function requestParsedPDF({
     return payload.job.result;
   }
 
-  return pollPDFJobResult(
-    payload.job.id,
-    fetchImpl,
-    signal,
-    fallbackErrorMessage,
-    pollIntervalMs,
-  );
+  return pollPDFJobResult(payload.job.id, fetchImpl, signal, fallbackErrorMessage, pollIntervalMs);
 }

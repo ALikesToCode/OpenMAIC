@@ -1,12 +1,10 @@
 import { createLogger } from '@/lib/logger';
 import { parseWithMinerUClient } from '@/lib/pdf/mineru-client';
+import { putCachedParsedPDF } from '@/lib/pdf/pdf-parse-cache';
 
 import type { CloudflareBindings } from '@/lib/cloudflare/bindings';
 import { getPDFJobRecord, updatePDFJobRecord } from './pdf-job-repository';
-import {
-  getSourcePdfArtifact,
-  putParsedResultArtifact,
-} from './pdf-artifact-store';
+import { getSourcePdfArtifact, putParsedResultArtifact } from './pdf-artifact-store';
 
 const log = createLogger('PDFJobDO');
 
@@ -21,6 +19,8 @@ interface DurableObjectContextLike {
 }
 
 interface StartPDFJobPayload {
+  cacheKey: string;
+  contentHash: string;
   jobId: string;
   apiKey?: string;
   baseUrl?: string;
@@ -79,6 +79,15 @@ export class PDFJobDurableObject {
         result,
         job.createdAt,
       );
+      await putCachedParsedPDF({
+        cacheKey: payload.cacheKey,
+        contentHash: payload.contentHash,
+        processingMode: 'mineru',
+        baseUrl: payload.baseUrl,
+        result,
+        createdAt: job.createdAt,
+        resultObjectKey,
+      });
 
       await updatePDFJobRecord(this.env.PDF_JOBS_DB, job.id, {
         status: 'succeeded',

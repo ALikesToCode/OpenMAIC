@@ -3,7 +3,8 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    MINERU_MODEL_SOURCE=huggingface
+    MINERU_MODEL_SOURCE=huggingface \
+    OPENMAIC_CONTAINER_REV=2026-04-07-ocr-rollout-1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \

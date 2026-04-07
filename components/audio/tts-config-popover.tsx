@@ -16,7 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
-import { getTTSVoices } from '@/lib/audio/constants';
+import { getCompatibleTTSVoices, resolveTTSVoiceId } from '@/lib/audio/tts-model-utils';
 import { useTTSPreview } from '@/lib/audio/use-tts-preview';
 
 /** Extract the English name from voice name format "ChineseName (English)" */
@@ -40,8 +40,10 @@ export function TtsConfigPopover() {
   const ttsSpeed = useSettingsStore((s) => s.ttsSpeed);
   const ttsProvidersConfig = useSettingsStore((s) => s.ttsProvidersConfig);
   const setTTSVoice = useSettingsStore((s) => s.setTTSVoice);
+  const selectedModelId = ttsProvidersConfig[ttsProviderId]?.modelId;
 
-  const voices = getTTSVoices(ttsProviderId);
+  const voices = getCompatibleTTSVoices(ttsProviderId, selectedModelId);
+  const selectedVoice = resolveTTSVoiceId(ttsProviderId, selectedModelId, ttsVoice);
   const localizedVoices = useMemo(
     () =>
       voices.map((v) => ({
@@ -65,7 +67,7 @@ export function TtsConfigPopover() {
         text: t('settings.ttsTestTextDefault'),
         providerId: ttsProviderId,
         modelId: providerConfig?.modelId,
-        voice: ttsVoice,
+        voice: selectedVoice,
         speed: ttsSpeed,
         apiKey: providerConfig?.apiKey,
         baseUrl: providerConfig?.baseUrl,
@@ -83,7 +85,7 @@ export function TtsConfigPopover() {
     ttsProviderId,
     ttsProvidersConfig,
     ttsSpeed,
-    ttsVoice,
+    selectedVoice,
   ]);
 
   const handleOpenChange = useCallback(
@@ -112,7 +114,8 @@ export function TtsConfigPopover() {
               <Volume2 className="size-3.5" />
               {ttsEnabled && (
                 <span className="max-w-[60px] truncate">
-                  {localizedVoices.find((v) => v.id === ttsVoice)?.displayName || ttsVoice}
+                  {localizedVoices.find((v) => v.id === selectedVoice)?.displayName ||
+                    selectedVoice}
                 </span>
               )}
             </button>
@@ -146,7 +149,7 @@ export function TtsConfigPopover() {
           <div className="px-3.5 py-3 space-y-3">
             {/* Voice + Preview row */}
             <div className="flex items-center gap-2">
-              <Select value={ttsVoice} onValueChange={setTTSVoice}>
+              <Select value={selectedVoice} onValueChange={setTTSVoice}>
                 <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
                   <SelectValue />
                 </SelectTrigger>

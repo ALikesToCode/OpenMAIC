@@ -7,25 +7,43 @@ import { encodeRawImageToPngDataUrl } from './png-encoder';
 
 const log = createLogger('PDFProviders');
 
-export async function parseWithUnpdf(pdfBuffer: Buffer): Promise<ParsedPdfContent> {
-  const pdf = await getDocumentProxy(new Uint8Array(pdfBuffer));
-  const numPages = pdf.numPages;
+interface UnpdfParseOptions {
+  includeImages?: boolean;
+}
 
-  const { text: pdfText } = await extractText(pdf, {
-    mergePages: true,
-  });
-
-  const images: string[] = [];
-  const pdfImagesMeta: Array<{
+interface UnpdfExtractedImages {
+  images: string[];
+  imageMapping: Record<string, string>;
+  pdfImages: Array<{
     id: string;
     src: string;
     pageNumber: number;
     width: number;
     height: number;
-  }> = [];
+  }>;
+}
+
+function createBaseResult(text: string, pageCount: number): ParsedPdfContent {
+  return {
+    text,
+    images: [],
+    metadata: {
+      pageCount,
+      parser: 'unpdf',
+      imageMapping: {},
+      pdfImages: [],
+    },
+  };
+}
+
+async function extractUnpdfImages(
+  pdf: Awaited<ReturnType<typeof getDocumentProxy>>,
+): Promise<UnpdfExtractedImages> {
+  const images: string[] = [];
+  const pdfImages: UnpdfExtractedImages['pdfImages'] = [];
   let imageCounter = 0;
 
-  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     try {
       const pageImages = await extractImages(pdf, pageNum);
 
@@ -43,7 +61,7 @@ export async function parseWithUnpdf(pdfBuffer: Buffer): Promise<ParsedPdfConten
           imageCounter++;
           const imgId = `img_${imageCounter}`;
           images.push(base64);
-          pdfImagesMeta.push({
+          pdfImages.push({
             id: imgId,
             src: base64,
             pageNumber: pageNum,
@@ -60,13 +78,57 @@ export async function parseWithUnpdf(pdfBuffer: Buffer): Promise<ParsedPdfConten
   }
 
   return {
-    text: pdfText,
     images,
+    imageMapping: Object.fromEntries(pdfImages.map((image) => [image.id, image.src])),
+    pdfImages,
+  };
+}
+
+function mergeUnpdfImages(
+  result: ParsedPdfContent,
+  extractedImages: UnpdfExtractedImages,
+): ParsedPdfContent {
+  return {
+    ...result,
+    images: extractedImages.images,
     metadata: {
-      pageCount: numPages,
+      ...result.metadata,
+      pageCount: result.metadata?.pageCount ?? 0,
       parser: 'unpdf',
-      imageMapping: Object.fromEntries(pdfImagesMeta.map((m) => [m.id, m.src])),
-      pdfImages: pdfImagesMeta,
+      imageMapping: extractedImages.imageMapping,
+      pdfImages: extractedImages.pdfImages,
     },
   };
+}
+
+export async function parseWithUnpdf(
+  pdfBuffer: Buffer,
+  options: UnpdfParseOptions = {},
+): Promise<ParsedPdfContent> {
+  const pdf = await getDocumentProxy(new Uint8Array(pdfBuffer));
+  const numPages = pdf.numPages;
+
+  const { text: pdfText } = await extractText(pdf, {
+    mergePages: true,
+  });
+
+  const result = createBaseResult(pdfText, numPages);
+
+  if (options.includeImages === false) {
+    return result;
+  }
+
+  return mergeUnpdfImages(result, await extractUnpdfImages(pdf));
+}
+
+export async function attachImagesToUnpdfResult(
+  pdfBuffer: Buffer,
+  result: ParsedPdfContent,
+): Promise<ParsedPdfContent> {
+  if (result.images.length > 0 || (result.metadata?.pdfImages?.length ?? 0) > 0) {
+    return result;
+  }
+
+  const pdf = await getDocumentProxy(new Uint8Array(pdfBuffer));
+  return mergeUnpdfImages(result, await extractUnpdfImages(pdf));
 }
