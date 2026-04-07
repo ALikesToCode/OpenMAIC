@@ -16,8 +16,17 @@ import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
 import { streamSceneOutlines } from '@/lib/generation/scene-outline-stream';
 import { PENDING_SCENE_ID } from '@/lib/store/stage';
 import { toast } from 'sonner';
+import type { Scene, Stage as StageData } from '@/lib/types/stage';
 
 const log = createLogger('Classroom');
+
+interface ServerClassroomResponse {
+  success?: boolean;
+  classroom?: {
+    stage: StageData;
+    scenes: Scene[];
+  };
+}
 
 export default function ClassroomDetailPage() {
   const params = useParams();
@@ -47,7 +56,7 @@ export default function ClassroomDetailPage() {
         try {
           const res = await fetch(`/api/classroom?id=${encodeURIComponent(classroomId)}`);
           if (res.ok) {
-            const json = await res.json();
+            const json = (await res.json()) as ServerClassroomResponse;
             if (json.success && json.classroom) {
               const { stage, scenes } = json.classroom;
               useStageStore.getState().setStage(stage);

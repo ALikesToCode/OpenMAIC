@@ -9,6 +9,10 @@ interface StreamSceneOutlinesParams {
   fallbackErrorMessage: string;
 }
 
+interface ErrorResponsePayload {
+  error?: string;
+}
+
 export async function streamSceneOutlines({
   body,
   headers,
@@ -25,7 +29,9 @@ export async function streamSceneOutlines({
   });
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: fallbackErrorMessage }));
+    const data = (await response
+      .json()
+      .catch(() => ({ error: fallbackErrorMessage }))) as ErrorResponsePayload;
     throw new Error(data.error || fallbackErrorMessage);
   }
 

@@ -41,6 +41,19 @@ const log = createLogger('Outlines Stream');
 
 export const maxDuration = 300;
 
+interface OutlineStreamRequestBody {
+  requirements?: UserRequirements;
+  pdfText?: string;
+  pdfImages?: PdfImage[];
+  imageMapping?: ImageMapping;
+  researchContext?: string;
+  agents?: AgentInfo[];
+  existingOutlines?: SceneOutline[];
+  extensionRequest?: {
+    additionalSceneCountTarget?: number;
+  };
+}
+
 /**
  * Incremental JSON array parser.
  * Extracts complete top-level objects from a partially-streamed JSON array.
@@ -104,7 +117,11 @@ export async function POST(req: NextRequest) {
   let requirementSnippet: string | undefined;
   let resolvedModelString: string | undefined;
   try {
-    const body = await req.json();
+    const rawBody: unknown = await req.json();
+    if (!rawBody || typeof rawBody !== 'object') {
+      return apiError('INVALID_REQUEST', 400, 'Request body must be a JSON object');
+    }
+    const body = rawBody as OutlineStreamRequestBody;
 
     // Get API configuration from request headers
     const { model: languageModel, modelInfo, modelString } = resolveModelFromHeaders(req);
@@ -114,18 +131,7 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Requirements are required');
     }
 
-    const { requirements, pdfText, pdfImages, imageMapping, researchContext, agents } = body as {
-      requirements: UserRequirements;
-      pdfText?: string;
-      pdfImages?: PdfImage[];
-      imageMapping?: ImageMapping;
-      researchContext?: string;
-      agents?: AgentInfo[];
-      existingOutlines?: SceneOutline[];
-      extensionRequest?: {
-        additionalSceneCountTarget?: number;
-      };
-    };
+    const { requirements, pdfText, pdfImages, imageMapping, researchContext, agents } = body;
     const existingOutlines = Array.isArray(body.existingOutlines) ? body.existingOutlines : [];
     const extensionRequest =
       body.extensionRequest && typeof body.extensionRequest === 'object'

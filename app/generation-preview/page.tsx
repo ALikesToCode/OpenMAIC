@@ -32,6 +32,7 @@ import { createLogger } from '@/lib/logger';
 import {
   hasDeferredPdfSourceDocuments,
   resolveSourceDocuments,
+  type ParsedSourceDocumentResult,
   type SourceDocumentInput,
 } from '@/lib/utils/source-document';
 import { requestParsedPDF } from '@/lib/pdf/parse-client';
@@ -39,8 +40,75 @@ import { requestRelevantPdfContext } from '@/lib/pdf/context-client';
 import { PDF_AUTO_ROUTE_THRESHOLDS } from '@/lib/pdf/routing';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
+import type {
+  GeneratedInteractiveContent,
+  GeneratedPBLContent,
+  GeneratedQuizContent,
+  GeneratedSlideContent,
+} from '@/lib/types/generation';
+import type { Scene } from '@/lib/types/stage';
+import type { SpeechAction } from '@/lib/types/action';
 
 const log = createLogger('GenerationPreview');
+
+type ErrorResponsePayload = { error?: string };
+
+type WebSearchResponse = {
+  success?: boolean;
+  sources?: Array<{ title: string; url: string }>;
+  context?: string;
+  error?: string;
+};
+
+type AgentProfileSummary = {
+  id: string;
+  name: string;
+  role: string;
+  persona: string;
+  avatar: string;
+  color: string;
+  priority: number;
+  voiceConfig?: {
+    providerId: string;
+    voiceId: string;
+  };
+};
+
+type AgentProfilesResponse = {
+  success?: boolean;
+  agents?: AgentProfileSummary[];
+  error?: string;
+};
+
+type SceneContentPayload =
+  | GeneratedSlideContent
+  | GeneratedQuizContent
+  | GeneratedInteractiveContent
+  | GeneratedPBLContent;
+
+type SceneContentResponse = {
+  success?: boolean;
+  content?: SceneContentPayload;
+  effectiveOutline?: SceneOutline;
+  error?: string;
+};
+
+type SceneActionsResponse = {
+  success?: boolean;
+  scene?: Scene;
+  error?: string;
+};
+
+type TTSResponse = {
+  success?: boolean;
+  base64?: string;
+  format?: string;
+  error?: string;
+};
+
+async function parseJson<T>(response: Response): Promise<T> {
+  return (await response.json()) as T;
+}
 
 function getSourceDocuments(session: GenerationSessionState): SourceDocumentInput[] {
   if (session.sourceDocuments?.length) {
@@ -121,6 +189,10 @@ function GenerationPreviewContent() {
       avatar: string;
       color: string;
       priority: number;
+      voiceConfig?: {
+        providerId: string;
+        voiceId: string;
+      };
     }>
   >([]);
   const agentRevealResolveRef = useRef<(() => void) | null>(null);
@@ -360,11 +432,13 @@ function GenerationPreviewContent() {
         });
 
         if (!res.ok) {
-          const data = await res.json().catch(() => ({ error: 'Web search failed' }));
+          const data = (await res
+            .json()
+            .catch(() => ({ error: 'Web search failed' }))) as ErrorResponsePayload;
           throw new Error(data.error || t('generation.webSearchFailed'));
         }
 
-        const searchData = await res.json();
+        const searchData = await parseJson<WebSearchResponse>(res);
         const sources = (searchData.sources || []).map((s: { title: string; url: string }) => ({
           title: s.title,
           url: s.url,
@@ -498,8 +572,10 @@ function GenerationPreviewContent() {
           });
 
           if (!agentResp.ok) throw new Error('Agent generation failed');
-          const agentData = await agentResp.json();
-          if (!agentData.success) throw new Error(agentData.error || 'Agent generation failed');
+          const agentData = await parseJson<AgentProfilesResponse>(agentResp);
+          if (!agentData.success || !agentData.agents) {
+            throw new Error(agentData.error || 'Agent generation failed');
+          }
 
           // Save to IndexedDB and registry
           const { saveGeneratedAgents } = await import('@/lib/orchestration/registry/store');
@@ -669,11 +745,13 @@ function GenerationPreviewContent() {
       });
 
       if (!contentResp.ok) {
-        const errorData = await contentResp.json().catch(() => ({ error: 'Request failed' }));
+        const errorData = (await contentResp
+          .json()
+          .catch(() => ({ error: 'Request failed' }))) as ErrorResponsePayload;
         throw new Error(errorData.error || t('generation.sceneGenerateFailed'));
       }
 
-      const contentData = await contentResp.json();
+      const contentData = await parseJson<SceneContentResponse>(contentResp);
       if (!contentData.success || !contentData.content) {
         throw new Error(contentData.error || t('generation.sceneGenerateFailed'));
       }
@@ -698,11 +776,13 @@ function GenerationPreviewContent() {
       });
 
       if (!actionsResp.ok) {
-        const errorData = await actionsResp.json().catch(() => ({ error: 'Request failed' }));
+        const errorData = (await actionsResp
+          .json()
+          .catch(() => ({ error: 'Request failed' }))) as ErrorResponsePayload;
         throw new Error(errorData.error || t('generation.sceneGenerateFailed'));
       }
 
-      const data = await actionsResp.json();
+      const data = await parseJson<SceneActionsResponse>(actionsResp);
       if (!data.success || !data.scene) {
         throw new Error(data.error || t('generation.sceneGenerateFailed'));
       }
@@ -711,7 +791,7 @@ function GenerationPreviewContent() {
       if (settings.ttsEnabled && settings.ttsProviderId !== 'browser-native-tts') {
         const ttsProviderConfig = settings.ttsProvidersConfig?.[settings.ttsProviderId];
         const speechActions = (data.scene.actions || []).filter(
-          (a: { type: string; text?: string }) => a.type === 'speech' && a.text,
+          (action): action is SpeechAction => action.type === 'speech' && !!action.text,
         );
 
         let ttsFailCount = 0;
@@ -738,8 +818,8 @@ function GenerationPreviewContent() {
               ttsFailCount++;
               continue;
             }
-            const ttsData = await resp.json();
-            if (!ttsData.success) {
+            const ttsData = await parseJson<TTSResponse>(resp);
+            if (!ttsData.success || !ttsData.base64 || !ttsData.format) {
               ttsFailCount++;
               continue;
             }
@@ -765,11 +845,12 @@ function GenerationPreviewContent() {
       }
 
       // Add scene to store and navigate
-      store.addScene(data.scene);
-      store.setCurrentSceneId(data.scene.id);
+      const generatedScene = data.scene;
+      store.addScene(generatedScene);
+      store.setCurrentSceneId(generatedScene.id);
 
       // Set remaining outlines as skeleton placeholders
-      const remaining = outlines.filter((o) => o.order !== data.scene.order);
+      const remaining = outlines.filter((o) => o.order !== generatedScene.order);
       store.setGeneratingOutlines(remaining);
 
       // Store generation params for classroom to continue generation
