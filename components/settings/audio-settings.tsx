@@ -24,6 +24,10 @@ import type { TTSProviderId, ASRProviderId } from '@/lib/audio/types';
 import { Volume2, Mic, MicOff, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import azureVoicesData from '@/lib/audio/azure.json';
+import {
+  getAudioRecordingExtension,
+  getPreferredAudioRecorderMimeType,
+} from '@/lib/audio/media-recorder-format';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('AudioSettings');
@@ -306,7 +310,12 @@ export function AudioSettings({ onSave }: AudioSettingsProps = {}) {
           const stream = await navigator.mediaDevices.getUserMedia({
             audio: true,
           });
-          const mediaRecorder = new MediaRecorder(stream);
+          const preferredMimeType = getPreferredAudioRecorderMimeType(MediaRecorder);
+          const mediaRecorder = preferredMimeType
+            ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+            : new MediaRecorder(stream);
+          const resolvedMimeType = mediaRecorder.mimeType || preferredMimeType || 'audio/webm';
+          const fileName = `recording.${getAudioRecordingExtension(resolvedMimeType)}`;
           mediaRecorderRef.current = mediaRecorder;
 
           const audioChunks: Blob[] = [];
@@ -317,9 +326,9 @@ export function AudioSettings({ onSave }: AudioSettingsProps = {}) {
           mediaRecorder.onstop = async () => {
             stream.getTracks().forEach((track) => track.stop());
 
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const audioBlob = new Blob(audioChunks, { type: resolvedMimeType });
             const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.webm');
+            formData.append('audio', audioBlob, fileName);
             formData.append('providerId', asrProviderId);
             formData.append('language', asrLanguage);
 

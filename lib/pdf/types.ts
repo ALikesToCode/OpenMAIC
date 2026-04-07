@@ -5,7 +5,7 @@
 /**
  * PDF Provider IDs
  */
-export type PDFProviderId = 'unpdf' | 'mineru';
+export type PDFProviderId = 'auto' | 'unpdf' | 'mineru';
 
 /**
  * PDF Provider Configuration

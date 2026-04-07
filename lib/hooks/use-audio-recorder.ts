@@ -1,5 +1,10 @@
 import { useState, useRef, useCallback } from 'react';
 import { ASR_PROVIDERS } from '@/lib/audio/constants';
+import {
+  getAudioRecordingErrorMessage,
+  getAudioRecordingExtension,
+  getPreferredAudioRecorderMimeType,
+} from '@/lib/audio/media-recorder-format';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('AudioRecorder');
@@ -36,12 +41,12 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
 
   // Send audio to server for transcription
   const transcribeAudio = useCallback(
-    async (audioBlob: Blob) => {
+    async (audioBlob: Blob, fileName = 'recording.webm') => {
       setIsProcessing(true);
 
       try {
         const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.webm');
+        formData.append('audio', audioBlob, fileName);
 
         // Get current ASR configuration from settings store
         // Note: This requires importing useSettingsStore in browser context
@@ -198,9 +203,12 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       // Create MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm',
-      });
+      const preferredMimeType = getPreferredAudioRecorderMimeType(MediaRecorder);
+      const mediaRecorder = preferredMimeType
+        ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+        : new MediaRecorder(stream);
+      const resolvedMimeType = mediaRecorder.mimeType || preferredMimeType || 'audio/webm';
+      const fileName = `recording.${getAudioRecordingExtension(resolvedMimeType)}`;
 
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -217,11 +225,12 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
 
         // Merge audio chunks
         const audioBlob = new Blob(audioChunksRef.current, {
-          type: 'audio/webm',
+          type: resolvedMimeType,
         });
 
         // Send to server for transcription
-        await transcribeAudio(audioBlob);
+        // Reuse the existing transcription path with the recorder-selected blob type.
+        await transcribeAudio(audioBlob, fileName);
         busyRef.current = false;
       };
 
@@ -237,7 +246,7 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
     } catch (error) {
       busyRef.current = false;
       log.error('Failed to start recording:', error);
-      onError?.('无法访问麦克风，请检查权限设置');
+      onError?.(getAudioRecordingErrorMessage(error));
     }
   }, [onTranscription, onError, transcribeAudio]);
 

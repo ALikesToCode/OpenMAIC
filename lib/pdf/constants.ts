@@ -9,6 +9,14 @@ import type { PDFProviderId, PDFProviderConfig } from './types';
  * PDF Provider Registry
  */
 export const PDF_PROVIDERS: Record<PDFProviderId, PDFProviderConfig> = {
+  auto: {
+    id: 'auto',
+    name: 'Auto',
+    requiresApiKey: false,
+    icon: '/logos/unpdf.svg',
+    features: ['text', 'images', 'tables', 'formulas', 'layout-analysis', 'metadata'],
+  },
+
   unpdf: {
     id: 'unpdf',
     name: 'unpdf',

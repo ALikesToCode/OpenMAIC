@@ -1,6 +1,7 @@
 import type { TTSProviderId } from '@/lib/audio/types';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import { TTS_PROVIDERS } from '@/lib/audio/constants';
+import { getTTSModelVoiceGroups } from '@/lib/audio/tts-model-utils';
 
 export interface ResolvedVoice {
   providerId: TTSProviderId;
@@ -82,7 +83,12 @@ export interface ProviderWithVoices {
 export function getAvailableProvidersWithVoices(
   ttsProvidersConfig: Record<
     string,
-    { apiKey?: string; enabled?: boolean; isServerConfigured?: boolean }
+    {
+      apiKey?: string;
+      enabled?: boolean;
+      isServerConfigured?: boolean;
+      customModels?: Array<{ id: string; name: string }>;
+    }
   >,
 ): ProviderWithVoices[] {
   const result: ProviderWithVoices[] = [];
@@ -98,28 +104,7 @@ export function getAvailableProvidersWithVoices(
 
     if (hasApiKey || isServerConfigured) {
       const allVoices = config.voices.map((v) => ({ id: v.id, name: v.name }));
-
-      // Build model groups
-      const modelGroups: ModelVoiceGroup[] = [];
-      if (config.models.length > 0) {
-        for (const model of config.models) {
-          const compatibleVoices = config.voices
-            .filter((v) => !v.compatibleModels || v.compatibleModels.includes(model.id))
-            .map((v) => ({ id: v.id, name: v.name }));
-          modelGroups.push({
-            modelId: model.id,
-            modelName: model.name,
-            voices: compatibleVoices,
-          });
-        }
-      } else {
-        // Provider has no model concept (Azure, Browser Native, Doubao)
-        modelGroups.push({
-          modelId: '',
-          modelName: config.name,
-          voices: allVoices,
-        });
-      }
+      const modelGroups = getTTSModelVoiceGroups(providerId, providerConfig);
 
       result.push({
         providerId,

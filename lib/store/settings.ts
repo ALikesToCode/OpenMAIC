@@ -311,8 +311,9 @@ const getDefaultAudioConfig = () => ({
 
 // Initialize default PDF config
 const getDefaultPDFConfig = () => ({
-  pdfProviderId: 'unpdf' as PDFProviderId,
+  pdfProviderId: 'auto' as PDFProviderId,
   pdfProvidersConfig: {
+    auto: { apiKey: '', baseUrl: '', enabled: true },
     unpdf: { apiKey: '', baseUrl: '', enabled: true },
     mineru: { apiKey: '', baseUrl: '', enabled: false },
   } as Record<PDFProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
@@ -1016,10 +1017,10 @@ export const useSettingsStore = create<SettingsState>()(
                 'browser-native' as ASRProviderId,
               );
               const validPDFProvider = validateProvider(
-                state.pdfProviderId,
+                state.pdfProviderId === 'auto' ? ('' as PDFProviderId | '') : state.pdfProviderId,
                 newPDFConfig,
                 pdfFallback,
-                'unpdf' as PDFProviderId,
+                'auto' as PDFProviderId,
               );
               let validImageProvider = validateProvider(
                 state.imageProviderId,
@@ -1092,9 +1093,9 @@ export const useSettingsStore = create<SettingsState>()(
               let autoVideoEnabled: boolean | undefined;
 
               if (!state.autoConfigApplied) {
-                // PDF: unpdf → mineru if server has it
-                if (newPDFConfig.mineru?.isServerConfigured && state.pdfProviderId === 'unpdf') {
-                  autoPdfProvider = 'mineru' as PDFProviderId;
+                // PDF: keep the local auto-routing mode unless the user explicitly changed it.
+                if (!state.pdfProviderId) {
+                  autoPdfProvider = 'auto' as PDFProviderId;
                 }
 
                 // TTS: select first server provider if current is not server-configured
@@ -1187,7 +1188,10 @@ export const useSettingsStore = create<SettingsState>()(
                   asrProviderId: validASRProvider as ASRProviderId,
                 }),
                 ...(validPDFProvider !== state.pdfProviderId && {
-                  pdfProviderId: validPDFProvider as PDFProviderId,
+                  pdfProviderId:
+                    state.pdfProviderId === 'auto'
+                      ? ('auto' as PDFProviderId)
+                      : (validPDFProvider as PDFProviderId),
                 }),
                 ...(validImageProvider !== state.imageProviderId && {
                   imageProviderId: validImageProvider as ImageProviderId,
@@ -1310,6 +1314,11 @@ export const useSettingsStore = create<SettingsState>()(
         if (!state.pdfProvidersConfig) {
           const defaultPDFConfig = getDefaultPDFConfig();
           Object.assign(state, defaultPDFConfig);
+        } else if (!state.pdfProvidersConfig.auto) {
+          state.pdfProvidersConfig.auto = { apiKey: '', baseUrl: '', enabled: true };
+          if (!state.pdfProviderId) {
+            state.pdfProviderId = 'auto';
+          }
         }
 
         // Add default Image config if missing

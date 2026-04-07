@@ -26,6 +26,9 @@ importers:
       '@cf-wasm/png':
         specifier: ^0.3.2
         version: 0.3.2
+      '@cloudflare/containers':
+        specifier: ^0.2.3
+        version: 0.2.3
       '@copilotkit/backend':
         specifier: ^0.37.0
         version: 0.37.0(axios@1.13.6)(ignore@5.3.2)(lodash@4.18.1)(playwright@1.59.1)(ws@8.19.0)
@@ -890,6 +893,9 @@ packages:
 
   '@chevrotain/utils@11.1.2':
     resolution: {integrity: sha512-4mudFAQ6H+MqBTfqLmU7G1ZwRzCLfJEooL/fsF6rCX5eePMbGhoy5n4g+G4vlh2muDcsCTJtL+uKbOzWxs5LHA==}
+
+  '@cloudflare/containers@0.2.3':
+    resolution: {integrity: sha512-LPPVLwmXQb8Q61r0v5IDM02ZQESRYzlrVHIe9vUoqvowBmYRBARCJi6GjUsW5/zCue/YRkcMBIiIoNCOWfH8TA==}
 
   '@cloudflare/kv-asset-handler@0.4.2':
     resolution: {integrity: sha512-SIOD2DxrRRwQ+jgzlXCqoEFiKOFqaPjhnNTGKXSRLvp1HiOvapLaFG2kEr9dYQTYe8rKrd9uvDUzmAITeNyaHQ==}
@@ -11212,6 +11218,8 @@ snapshots:
   '@chevrotain/types@11.1.2': {}
 
   '@chevrotain/utils@11.1.2': {}
+
+  '@cloudflare/containers@0.2.3': {}
 
   '@cloudflare/kv-asset-handler@0.4.2': {}
 

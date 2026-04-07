@@ -12,7 +12,7 @@ describe('PDF provider module boundaries', () => {
 
     expect(source).not.toMatch(/from ['"]unpdf['"]/);
     expect(source).not.toMatch(/from ['"]\.\/png-encoder['"]/);
-    expect(source).toContain('__CLOUDFLARE_WORKER_DEPLOY__');
+    expect(source).not.toContain('disabled for Cloudflare Workers deployments');
     expect(source).toContain("await import('./pdf-provider-unpdf')");
   });
 

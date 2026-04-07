@@ -12,6 +12,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { fetchNavyModelsForSurface, toCustomModelEntries } from '@/lib/navy/model-sync';
+import {
+  getAudioRecordingExtension,
+  getPreferredAudioRecorderMimeType,
+} from '@/lib/audio/media-recorder-format';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { ASR_PROVIDERS } from '@/lib/audio/constants';
@@ -150,7 +154,12 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
           const stream = await navigator.mediaDevices.getUserMedia({
             audio: true,
           });
-          const mediaRecorder = new MediaRecorder(stream);
+          const preferredMimeType = getPreferredAudioRecorderMimeType(MediaRecorder);
+          const mediaRecorder = preferredMimeType
+            ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+            : new MediaRecorder(stream);
+          const resolvedMimeType = mediaRecorder.mimeType || preferredMimeType || 'audio/webm';
+          const fileName = `recording.${getAudioRecordingExtension(resolvedMimeType)}`;
           mediaRecorderRef.current = mediaRecorder;
           const audioChunks: Blob[] = [];
           mediaRecorder.ondataavailable = (event) => {
@@ -158,9 +167,9 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
           };
           mediaRecorder.onstop = async () => {
             stream.getTracks().forEach((track) => track.stop());
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const audioBlob = new Blob(audioChunks, { type: resolvedMimeType });
             const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.webm');
+            formData.append('audio', audioBlob, fileName);
             formData.append('providerId', selectedProviderId);
             formData.append(
               'modelId',

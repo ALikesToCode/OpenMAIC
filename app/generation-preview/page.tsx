@@ -33,6 +33,7 @@ import {
   type ParsedSourceDocumentResult,
   type SourceDocumentInput,
 } from '@/lib/utils/source-document';
+import { requestParsedPDF } from '@/lib/pdf/parse-client';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
 
@@ -239,39 +240,17 @@ function GenerationPreviewContent() {
             const pdfFile = new File([pdfBlob], document.fileName || 'document.pdf', {
               type: 'application/pdf',
             });
-
-            const parseFormData = new FormData();
-            parseFormData.append('pdf', pdfFile);
-
-            if (document.providerId) {
-              parseFormData.append('providerId', document.providerId);
-            }
-            if (document.providerConfig?.apiKey?.trim()) {
-              parseFormData.append('apiKey', document.providerConfig.apiKey);
-            }
-            if (document.providerConfig?.baseUrl?.trim()) {
-              parseFormData.append('baseUrl', document.providerConfig.baseUrl);
-            }
-
-            const parseResponse = await fetch('/api/parse-pdf', {
-              method: 'POST',
-              body: parseFormData,
+            const parseData = await requestParsedPDF({
+              file: pdfFile,
+              providerId: document.providerId,
+              providerConfig: document.providerConfig,
               signal,
+              fallbackErrorMessage: t('generation.pdfParseFailed'),
             });
 
-            if (!parseResponse.ok) {
-              const errorData = await parseResponse.json();
-              throw new Error(errorData.error || t('generation.pdfParseFailed'));
-            }
-
-            const parseResult = await parseResponse.json();
-            if (!parseResult.success || !parseResult.data) {
-              throw new Error(t('generation.pdfParseFailed'));
-            }
-
             return {
-              text: parseResult.data.text as string,
-              images: extractParsedPdfImages(parseResult.data),
+              text: parseData.text,
+              images: extractParsedPdfImages(parseData),
             } satisfies ParsedSourceDocumentResult;
           }),
         );

@@ -1,14 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { TTS_PROVIDERS, DEFAULT_TTS_VOICES } from '@/lib/audio/constants';
 import type { TTSProviderId } from '@/lib/audio/types';
-import { Volume2, Loader2, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
+import { fetchNavyModelsForSurface, toCustomModelEntries } from '@/lib/navy/model-sync';
+import { getMergedTTSModels, resolveTTSModelId } from '@/lib/audio/tts-model-utils';
+import { Volume2, Loader2, CheckCircle2, XCircle, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
 import { useTTSPreview } from '@/lib/audio/use-tts-preview';
@@ -37,11 +46,26 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
 
   const ttsProvider = TTS_PROVIDERS[selectedProviderId] ?? TTS_PROVIDERS['openai-tts'];
   const isServerConfigured = !!ttsProvidersConfig[selectedProviderId]?.isServerConfigured;
+  const currentConfig = ttsProvidersConfig[selectedProviderId];
+  const customModels = useMemo(
+    () => currentConfig?.customModels || [],
+    [currentConfig?.customModels],
+  );
+  const allModels = useMemo(
+    () => getMergedTTSModels(selectedProviderId, currentConfig),
+    [selectedProviderId, currentConfig],
+  );
+  const selectedModelId = resolveTTSModelId(
+    selectedProviderId,
+    currentConfig?.modelId,
+    currentConfig,
+  );
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [testText, setTestText] = useState(t('settings.ttsTestTextDefault'));
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
+  const [syncingModels, setSyncingModels] = useState(false);
   const { previewing: testingTTS, startPreview, stopPreview } = useTTSPreview();
 
   // Doubao TTS uses compound "appId:accessKey" — split for separate UI fields
@@ -102,6 +126,49 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
       );
     }
   };
+
+  const handleSyncNavyModels = useCallback(async () => {
+    if (selectedProviderId !== 'navy-tts') return;
+
+    setSyncingModels(true);
+    setTestStatus('idle');
+    setTestMessage('');
+
+    try {
+      const builtInIds = new Set(ttsProvider.models.map((model) => model.id));
+      const syncedModels = toCustomModelEntries(await fetchNavyModelsForSurface('tts')).filter(
+        (model) => !builtInIds.has(model.id),
+      );
+      const mergedCustomModels = [
+        ...syncedModels,
+        ...customModels.filter((model) => !syncedModels.some((synced) => synced.id === model.id)),
+      ];
+      const nextModelId = resolveTTSModelId(selectedProviderId, currentConfig?.modelId, {
+        customModels: mergedCustomModels,
+      });
+
+      setTTSProviderConfig(selectedProviderId, {
+        customModels: mergedCustomModels,
+        ...(nextModelId ? { modelId: nextModelId } : {}),
+      });
+
+      setTestStatus('success');
+      setTestMessage(t('settings.modelSyncSuccess'));
+    } catch (error) {
+      log.error('Failed to sync Navy TTS models:', error);
+      setTestStatus('error');
+      setTestMessage(error instanceof Error ? error.message : t('settings.modelSyncFailed'));
+    } finally {
+      setSyncingModels(false);
+    }
+  }, [
+    selectedProviderId,
+    ttsProvider.models,
+    customModels,
+    currentConfig?.modelId,
+    setTTSProviderConfig,
+    t,
+  ]);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -265,6 +332,46 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
         </>
       )}
 
+      {/* Model Selection */}
+      {allModels.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-sm">{t('settings.ttsModel')}</Label>
+            {selectedProviderId === 'navy-tts' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncNavyModels}
+                disabled={syncingModels}
+                className="gap-1.5"
+              >
+                {syncingModels ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {t('settings.syncNavyModels')}
+              </Button>
+            )}
+          </div>
+          <Select
+            value={selectedModelId}
+            onValueChange={(value) => setTTSProviderConfig(selectedProviderId, { modelId: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {allModels.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {model.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Test TTS */}
       <div className="space-y-2">
         <Label className="text-sm">{t('settings.testTTS')}</Label>
@@ -312,27 +419,6 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
             {testStatus === 'error' && <XCircle className="h-4 w-4 mt-0.5 shrink-0" />}
             <p className="flex-1 min-w-0 break-all">{testMessage}</p>
           </div>
-        </div>
-      )}
-
-      {/* Available Models */}
-      {ttsProvider.models.length > 0 && (
-        <div className="space-y-2">
-          <Label className="text-sm text-muted-foreground">{t('settings.availableModels')}</Label>
-          <div className="flex flex-wrap gap-2">
-            {ttsProvider.models.map((model) => (
-              <div
-                key={model.id}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/50 border border-border/40 text-xs font-mono text-muted-foreground"
-              >
-                <span className="size-1.5 rounded-full bg-emerald-500/70" />
-                {model.name}
-              </div>
-            ))}
-          </div>
-          <p className="text-[11px] text-muted-foreground/60">
-            {t('settings.modelSelectedViaVoice')}
-          </p>
         </div>
       )}
     </div>

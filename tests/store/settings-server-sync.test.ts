@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import type { PDFProviderId } from '@/lib/pdf/types';
 
 // ---------------------------------------------------------------------------
 // Mocks — must be defined before importing the store
@@ -104,6 +105,7 @@ vi.mock('@/lib/audio/types', () => ({}));
 
 vi.mock('@/lib/pdf/constants', () => ({
   PDF_PROVIDERS: {
+    auto: { id: 'auto', requiresApiKey: false },
     unpdf: { id: 'unpdf', requiresApiKey: false },
     mineru: { id: 'mineru', requiresApiKey: false },
   },
@@ -569,7 +571,22 @@ describe('fetchServerProviders — PDF stale selection', () => {
     mockServerResponse({});
     await store.getState().fetchServerProviders();
 
-    expect(store.getState().pdfProviderId).toBe('unpdf');
+    expect(store.getState().pdfProviderId).toBe('auto');
+  });
+
+  it('keeps auto selected when server-configured PDF providers change', async () => {
+    const store = await getStore();
+
+    store.getState().setPDFProvider('auto' as PDFProviderId);
+
+    mockServerResponse({ pdf: { mineru: {} } });
+    await store.getState().fetchServerProviders();
+    expect(store.getState().pdfProviderId).toBe('auto');
+
+    mockServerResponse({});
+    await store.getState().fetchServerProviders();
+
+    expect(store.getState().pdfProviderId).toBe('auto');
   });
 });
 
