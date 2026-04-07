@@ -95,7 +95,7 @@
  * Provider Implementation Patterns:
  *
  * Pattern 1: Local Node.js Parser (like unpdf)
- * - Import parsing library
+ * - Import parsing library from a server-only module
  * - Process Buffer directly
  * - Extract text and images synchronously or asynchronously
  * - Convert images to base64 data URLs
@@ -118,7 +118,7 @@
  * Image Extraction Best Practices:
  * - Always convert to base64 data URLs (data:image/png;base64,...)
  * - Use PNG for lossless quality
- * - Use sharp for efficient image processing
+ * - Use a Worker-compatible encoder for raw image data
  * - Handle errors per image (don't fail entire parsing)
  * - Log extraction failures but continue processing
  *
@@ -137,12 +137,12 @@
  * - Always include provider name in error messages
  */
 
-import { extractText, getDocumentProxy, extractImages } from 'unpdf';
-import sharp from 'sharp';
 import type { PDFParserConfig } from './types';
 import type { ParsedPdfContent } from '@/lib/types/pdf';
 import { PDF_PROVIDERS } from './constants';
 import { createLogger } from '@/lib/logger';
+
+declare const __CLOUDFLARE_WORKER_DEPLOY__: boolean;
 
 const log = createLogger('PDFProviders');
 
@@ -168,9 +168,17 @@ export async function parsePDF(
   let result: ParsedPdfContent;
 
   switch (config.providerId) {
-    case 'unpdf':
+    case 'unpdf': {
+      if (__CLOUDFLARE_WORKER_DEPLOY__) {
+        throw new Error(
+          'The built-in unpdf parser is disabled for Cloudflare Workers deployments to stay within the free-tier Worker size limit. Use the MinerU provider for deployed Workers.',
+        );
+      }
+
+      const { parseWithUnpdf } = await import('./pdf-provider-unpdf');
       result = await parseWithUnpdf(pdfBuffer);
       break;
+    }
 
     case 'mineru':
       result = await parseWithMinerU(config, pdfBuffer);
@@ -186,80 +194,6 @@ export async function parsePDF(
   }
 
   return result;
-}
-
-/**
- * Parse PDF using unpdf (existing implementation)
- */
-async function parseWithUnpdf(pdfBuffer: Buffer): Promise<ParsedPdfContent> {
-  const uint8Array = new Uint8Array(pdfBuffer);
-  const pdf = await getDocumentProxy(uint8Array);
-  const numPages = pdf.numPages;
-
-  // Extract text using the document proxy
-  const { text: pdfText } = await extractText(pdf, {
-    mergePages: true,
-  });
-
-  // Extract images using the same document proxy
-  const images: string[] = [];
-  const pdfImagesMeta: Array<{
-    id: string;
-    src: string;
-    pageNumber: number;
-    width: number;
-    height: number;
-  }> = [];
-  let imageCounter = 0;
-
-  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-    try {
-      const pageImages = await extractImages(pdf, pageNum);
-      for (let i = 0; i < pageImages.length; i++) {
-        const imgData = pageImages[i];
-        try {
-          // Use sharp to convert raw image data to PNG base64
-          const pngBuffer = await sharp(Buffer.from(imgData.data), {
-            raw: {
-              width: imgData.width,
-              height: imgData.height,
-              channels: imgData.channels,
-            },
-          })
-            .png()
-            .toBuffer();
-
-          // Convert to base64
-          const base64 = `data:image/png;base64,${pngBuffer.toString('base64')}`;
-          imageCounter++;
-          const imgId = `img_${imageCounter}`;
-          images.push(base64);
-          pdfImagesMeta.push({
-            id: imgId,
-            src: base64,
-            pageNumber: pageNum,
-            width: imgData.width,
-            height: imgData.height,
-          });
-        } catch (sharpError) {
-          log.error(`Failed to convert image ${i + 1} from page ${pageNum}:`, sharpError);
-        }
-      }
-    } catch (pageError) {
-      log.error(`Failed to extract images from page ${pageNum}:`, pageError);
-    }
-  }
-
-  return {
-    text: pdfText,
-    images,
-    metadata: {
-      pageCount: numPages,
-      parser: 'unpdf',
-      imageMapping: Object.fromEntries(pdfImagesMeta.map((m) => [m.id, m.src])),
-      pdfImages: pdfImagesMeta,
-    },
-  };
 }
 
 /**

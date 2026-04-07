@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
-import path from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-const repoRoot = path.resolve(__dirname, '..', '..');
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(currentDir, '..', '..');
 
 function readRepoFile(relativePath: string) {
-  return readFileSync(path.join(repoRoot, relativePath), 'utf8');
+  return readFileSync(join(repoRoot, relativePath), 'utf8');
 }
 
 describe('dev memory regressions', () => {
