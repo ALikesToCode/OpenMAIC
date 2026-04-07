@@ -6,7 +6,8 @@
  */
 
 import type { NextRequest } from 'next/server';
-import { getModel, parseModelString, type ModelWithInfo } from '@/lib/ai/providers';
+import { parseModelString } from '@/lib/ai/providers';
+import { getModel, type ModelWithInfo } from '@/lib/ai/provider-model';
 import { resolveProxy } from '@/lib/server/provider-config';
 import { resolveProviderRequestConfig } from '@/lib/server/provider-request-config';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
