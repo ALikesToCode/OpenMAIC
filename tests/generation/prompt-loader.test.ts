@@ -18,7 +18,7 @@ describe('prompt loader', () => {
     });
 
     expect(prompt).not.toBeNull();
-    expect(prompt?.system).toContain('thermodynamics');
+    expect(prompt?.user).toContain('thermodynamics');
     expect(prompt?.user).toContain('Chapter summary');
     expect(prompt?.system).not.toContain('{{snippet:');
   });
