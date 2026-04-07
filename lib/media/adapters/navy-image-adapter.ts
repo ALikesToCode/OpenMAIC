@@ -53,22 +53,26 @@ function buildSize(options: ImageGenerationOptions): string | undefined {
   return `${width}x${height}`;
 }
 
+function parseSize(size: string): { width: number; height: number } {
+  const [width, height] = size.split('x').map(Number);
+
+  if (!Number.isFinite(width) || !Number.isFinite(height)) {
+    throw new Error(`Invalid Navy image size: ${size}`);
+  }
+
+  return { width, height };
+}
+
 function resolveDimensions(options: ImageGenerationOptions): { width: number; height: number } {
   if (options.width && options.height) {
     return { width: options.width, height: options.height };
   }
 
-  switch (options.aspectRatio) {
-    case '16:9':
-      return { width: 1024, height: 576 };
-    case '4:3':
-      return { width: 1024, height: 768 };
-    case '9:16':
-      return { width: 576, height: 1024 };
-    case '1:1':
-    default:
-      return { width: 1024, height: 1024 };
+  if (options.aspectRatio) {
+    return parseSize(buildSize(options) ?? '1024x1024');
   }
+
+  return { width: 1024, height: 1024 };
 }
 
 /**
@@ -155,7 +159,7 @@ export async function generateWithNavyImage(
     throw new Error(`Navy returned empty image response: ${JSON.stringify(data)}`);
   }
 
-  const { width, height } = resolveDimensions(options);
+  const { width, height } = size ? parseSize(size) : resolveDimensions(options);
 
   return {
     url: imageData.url,

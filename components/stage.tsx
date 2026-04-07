@@ -19,6 +19,7 @@ import type { AudioIndicatorState } from '@/components/roundtable/audio-indicato
 import type { Action, DiscussionAction, SpeechAction } from '@/lib/types/action';
 import { cn } from '@/lib/utils';
 import { inferAutomaticExtensionSceneTarget } from '@/lib/generation/scene-count-guidance';
+import { canExtendClassroom } from '@/lib/generation/scene-extension-availability';
 // Playback state persistence removed — refresh always starts from the beginning
 import { ChatArea, type ChatAreaRef } from '@/components/chat/chat-area';
 import { agentsToParticipants, useAgentRegistry } from '@/lib/orchestration/registry/store';
@@ -786,13 +787,14 @@ export function Stage({
       }),
     [scenes.length, stage?.generationContext],
   );
-  const canExtendScenes =
-    !!onGenerateMoreScenes &&
-    !!stage?.generationContext &&
-    playbackCompleted &&
-    !isPendingScene &&
-    currentSceneIndex === scenes.length - 1 &&
-    !hasNextPending;
+  const canExtendScenes = canExtendClassroom({
+    hasGenerateMoreScenesHandler: !!onGenerateMoreScenes,
+    hasGenerationContext: !!stage?.generationContext,
+    isPendingScene,
+    currentSceneIndex,
+    sceneCount: scenes.length,
+    hasNextPending,
+  });
 
   // get action information
   const totalActions = currentScene?.actions?.length || 0;

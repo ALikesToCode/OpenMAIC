@@ -139,27 +139,56 @@ function splitSourceSections(pdfText: string): SourceSection[] {
 }
 
 function splitLongParagraph(text: string, targetChars: number): string[] {
-  const normalized = normalizeWhitespace(text);
-  if (normalized.length <= targetChars) {
-    return [normalized];
+  const trimmed = text.trim();
+  if (trimmed.length <= targetChars) {
+    return [trimmed];
   }
 
-  const sentences = normalized.split(/(?<=[.!?])\s+/);
-  if (sentences.length > 1) {
+  if (trimmed.includes('\n')) {
+    const lines = trimmed.split('\n');
     const chunks: string[] = [];
     let current = '';
 
-    for (const sentence of sentences) {
-      if (!current) {
-        current = sentence;
+    for (const line of lines) {
+      const candidate = current ? `${current}\n${line}` : line;
+      if (candidate.length > targetChars && current) {
+        chunks.push(current.trim());
+        current = line;
+      } else {
+        current = candidate;
+      }
+    }
+
+    if (current.trim()) {
+      chunks.push(current.trim());
+    }
+
+    if (chunks.length > 1) {
+      return chunks;
+    }
+  }
+
+  const sentenceMatches = trimmed.match(/[^.!?\n]+[.!?]?(?:\s+|$)/g);
+  if (sentenceMatches && sentenceMatches.length > 1) {
+    const chunks: string[] = [];
+    let current = '';
+
+    for (const sentence of sentenceMatches) {
+      const normalizedSentence = sentence.trim();
+      if (!normalizedSentence) {
         continue;
       }
 
-      if (`${current} ${sentence}`.length > targetChars) {
+      if (!current) {
+        current = normalizedSentence;
+        continue;
+      }
+
+      if (`${current} ${normalizedSentence}`.length > targetChars) {
         chunks.push(current);
-        current = sentence;
+        current = normalizedSentence;
       } else {
-        current = `${current} ${sentence}`;
+        current = `${current} ${normalizedSentence}`;
       }
     }
 
@@ -171,8 +200,8 @@ function splitLongParagraph(text: string, targetChars: number): string[] {
   }
 
   const chunks: string[] = [];
-  for (let offset = 0; offset < normalized.length; offset += targetChars) {
-    chunks.push(normalized.slice(offset, offset + targetChars).trim());
+  for (let offset = 0; offset < trimmed.length; offset += targetChars) {
+    chunks.push(trimmed.slice(offset, offset + targetChars).trim());
   }
   return chunks.filter(Boolean);
 }

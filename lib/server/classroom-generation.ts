@@ -11,14 +11,13 @@ import {
   generateSceneActions,
   generateSceneContent,
 } from '@/lib/generation/scene-generator';
+import { createAdaptiveTaskQueue } from '@/lib/generation/adaptive-task-queue';
 import type { AICallFn } from '@/lib/generation/pipeline-types';
 import type { AgentInfo } from '@/lib/generation/pipeline-types';
 import { formatTeacherPersonaForPrompt } from '@/lib/generation/prompt-formatters';
 import { getDefaultAgents } from '@/lib/orchestration/registry/store';
 import { createLogger } from '@/lib/logger';
 import { parseModelString } from '@/lib/ai/providers';
-import { MAX_PDF_CONTENT_CHARS } from '@/lib/constants/generation';
-import { buildRelevantPdfContextServer } from '@/lib/pdf/context-server';
 import { resolveApiKey, resolveWebSearchApiKey } from '@/lib/server/provider-config';
 import { resolveModel } from '@/lib/server/resolve-model';
 import { buildSearchQuery } from '@/lib/server/search-query-builder';
@@ -34,6 +33,45 @@ import type { Scene, Stage } from '@/lib/types/stage';
 import { AGENT_COLOR_PALETTE, AGENT_DEFAULT_AVATARS } from '@/lib/constants/agent-defaults';
 
 const log = createLogger('Classroom');
+
+class SceneGenerationStepError extends Error {
+  public readonly retryable: boolean;
+
+  constructor(message: string, retryable = false) {
+    super(message);
+    this.name = 'SceneGenerationStepError';
+    this.retryable = retryable;
+  }
+}
+
+const CONTENT_PREFETCH_CONCURRENCY = {
+  initialConcurrency: 2,
+  minConcurrency: 1,
+  maxConcurrency: 4,
+  maxRequestsPerMinute: 30,
+  successesToIncrease: 3,
+  retryLimit: 2,
+  baseRetryDelayMs: 1000,
+  maxRetryDelayMs: 8000,
+} as const;
+
+function isRetryableSceneGenerationError(error: unknown): boolean {
+  if (error instanceof SceneGenerationStepError) {
+    return error.retryable;
+  }
+
+  if (error instanceof TypeError) {
+    return true;
+  }
+
+  if (error instanceof Error) {
+    return /(timeout|timed out|network|failed to fetch|rate limit|temporar|overloaded)/i.test(
+      error.message,
+    );
+  }
+
+  return false;
+}
 
 export interface GenerateClassroomInput {
   requirement: string;
@@ -228,19 +266,6 @@ export async function generateClassroom(
     language: lang,
   };
   let pdfText = pdfContent?.text || undefined;
-  if (pdfText && pdfText.length > MAX_PDF_CONTENT_CHARS) {
-    try {
-      const relevantPdfContext = await buildRelevantPdfContextServer({
-        requirement,
-        pdfText,
-        maxChars: MAX_PDF_CONTENT_CHARS,
-      });
-      pdfText = relevantPdfContext.context;
-    } catch (error) {
-      log.warn('Failed to condense long PDF context, falling back to truncation:', error);
-      pdfText = pdfText.slice(0, MAX_PDF_CONTENT_CHARS);
-    }
-  }
 
   // Resolve agents based on agentMode
   let agents: AgentInfo[];
@@ -368,9 +393,53 @@ export async function generateClassroom(
   log.info('Stage 2: Generating scene content and actions...');
   let generatedScenes = 0;
 
-  for (const [index, outline] of outlines.entries()) {
-    const safeOutline = applyOutlineFallbacks(outline, true);
+  const contentTasks = createAdaptiveTaskQueue(
+    outlines.map((outline) => async () => {
+      const safeOutline = applyOutlineFallbacks(outline, true);
+      const content = await generateSceneContent(
+        safeOutline,
+        aiCall,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        agents,
+      );
+
+      if (!content) {
+        throw new SceneGenerationStepError(
+          `Failed to generate content: ${safeOutline.title}`,
+          false,
+        );
+      }
+
+      return { safeOutline, content };
+    }),
+    {
+      ...CONTENT_PREFETCH_CONCURRENCY,
+      shouldRetry: isRetryableSceneGenerationError,
+      onConcurrencyChange: (concurrency) => {
+        log.info('Adjusted server scene content prefetch concurrency', { concurrency });
+      },
+    },
+  );
+
+  for (const [index] of outlines.entries()) {
     const progressStart = 30 + Math.floor((index / Math.max(outlines.length, 1)) * 60);
+    const contentTaskResult = await contentTasks[index];
+
+    if (!contentTaskResult.success) {
+      log.warn(`Skipping scene at index ${index + 1} — content generation failed`, {
+        error:
+          contentTaskResult.error instanceof Error
+            ? contentTaskResult.error.message
+            : String(contentTaskResult.error),
+      });
+      continue;
+    }
+
+    const { safeOutline, content } = contentTaskResult.value;
 
     await options.onProgress?.({
       step: 'generating_scenes',
@@ -379,21 +448,6 @@ export async function generateClassroom(
       scenesGenerated: generatedScenes,
       totalScenes: outlines.length,
     });
-
-    const content = await generateSceneContent(
-      safeOutline,
-      aiCall,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      agents,
-    );
-    if (!content) {
-      log.warn(`Skipping scene "${safeOutline.title}" — content generation failed`);
-      continue;
-    }
 
     const actions = await generateSceneActions(safeOutline, content, aiCall, undefined, agents);
     log.info(`Scene "${safeOutline.title}": ${actions.length} actions`);

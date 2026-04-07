@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const streamLLMMock = vi.hoisted(() => vi.fn());
+const buildPromptPdfContentMock = vi.hoisted(() => vi.fn());
 const resolveModelFromHeadersMock = vi.hoisted(() =>
   vi.fn().mockReturnValue({
     model: {} as never,
@@ -22,6 +23,10 @@ vi.mock('@/lib/server/resolve-model', () => ({
   resolveModelFromHeaders: resolveModelFromHeadersMock,
 }));
 
+vi.mock('@/lib/generation/pdf-prompt-context', () => ({
+  buildPromptPdfContent: buildPromptPdfContentMock,
+}));
+
 function createTextStream(chunks: string[]) {
   return {
     textStream: (async function* () {
@@ -36,7 +41,9 @@ describe('POST /api/generate/scene-outlines-stream', () => {
   beforeEach(() => {
     vi.resetModules();
     streamLLMMock.mockReset();
+    buildPromptPdfContentMock.mockReset();
     resolveModelFromHeadersMock.mockClear();
+    buildPromptPdfContentMock.mockImplementation(async ({ pdfText }: { pdfText?: string }) => pdfText);
   });
 
   it('backfills missing outline language from the requested course language', async () => {
@@ -101,5 +108,54 @@ describe('POST /api/generate/scene-outlines-stream', () => {
     expect(doneEvent?.outlines[0]?.language).toBe('en-US');
     expect(doneEvent?.outlines[1]?.language).toBe('en-US');
     expect(doneEvent?.outlines[1]?.pblConfig?.language).toBe('en-US');
+  });
+
+  it('uses the server-selected PDF context in the prompt instead of blindly truncating', async () => {
+    buildPromptPdfContentMock.mockResolvedValueOnce('Selected later weeks context');
+    streamLLMMock.mockReturnValueOnce(
+      createTextStream([
+        JSON.stringify([
+          {
+            id: 'scene_1',
+            type: 'slide',
+            title: 'Week 6',
+            description: 'Continue with the remaining material.',
+            keyPoints: ['Later chapter'],
+            order: 1,
+            language: 'en-US',
+          },
+        ]),
+      ]),
+    );
+
+    const { POST } = await import('@/app/api/generate/scene-outlines-stream/route');
+    const longPdfText = 'L'.repeat(60000);
+    const response = await POST(
+      new Request('http://localhost/api/generate/scene-outlines-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requirements: {
+            requirement: 'Continue through all remaining weeks.',
+            language: 'en-US',
+          },
+          pdfText: longPdfText,
+        }),
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(buildPromptPdfContentMock).toHaveBeenCalledWith({
+      requirement: 'Continue through all remaining weeks.',
+      pdfText: longPdfText,
+    });
+    expect(streamLLMMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('Selected later weeks context'),
+      }),
+      'scene-outlines-stream',
+    );
   });
 });

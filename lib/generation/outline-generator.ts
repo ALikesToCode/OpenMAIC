@@ -4,7 +4,7 @@
  */
 
 import { nanoid } from 'nanoid';
-import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
+import { MAX_VISION_IMAGES } from '@/lib/constants/generation';
 import type {
   UserRequirements,
   SceneOutline,
@@ -22,6 +22,7 @@ import {
 } from './scene-count-guidance';
 import { createLogger } from '@/lib/logger';
 import { normalizeOutlineLanguage } from './outline-language';
+import { buildPromptPdfContent } from './pdf-prompt-context';
 const log = createLogger('Generation');
 
 /**
@@ -102,12 +103,17 @@ export async function generateSceneOutlinesFromRequirements(
   }
 
   // Use simplified prompt variables
+  const promptPdfContent = await buildPromptPdfContent({
+    requirement: requirements.requirement,
+    pdfText,
+  });
+
   const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
     // New simplified variables
     requirement: requirements.requirement,
     language: requirements.language,
-    pdfContent: pdfText
-      ? pdfText.substring(0, MAX_PDF_CONTENT_CHARS)
+    pdfContent: promptPdfContent
+      ? promptPdfContent
       : requirements.language === 'zh-CN'
         ? '无'
         : 'None',

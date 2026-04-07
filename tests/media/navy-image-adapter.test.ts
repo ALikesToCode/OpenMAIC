@@ -41,6 +41,44 @@ describe('navy-image-adapter', () => {
     expect(body.response_format).toBeUndefined();
   });
 
+  it.each([
+    {
+      aspectRatio: '16:9' as const,
+      expectedWidth: 1536,
+      expectedHeight: 1024,
+    },
+    {
+      aspectRatio: '9:16' as const,
+      expectedWidth: 1024,
+      expectedHeight: 1536,
+    },
+  ])(
+    'returns result dimensions that match the Navy request size for $aspectRatio',
+    async ({ aspectRatio, expectedWidth, expectedHeight }) => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          data: [{ url: 'https://example.com/image.png' }],
+        }),
+      });
+
+      const result = await generateWithNavyImage(
+        {
+          providerId: 'navy-image',
+          apiKey: 'test-key',
+          model: 'flux',
+        },
+        {
+          prompt: 'simple diagram',
+          aspectRatio,
+        },
+      );
+
+      expect(result.width).toBe(expectedWidth);
+      expect(result.height).toBe(expectedHeight);
+    },
+  );
+
   it('uses a numeric square size in the connectivity probe', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

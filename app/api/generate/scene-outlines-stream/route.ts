@@ -26,7 +26,8 @@ import {
   buildSceneCountGuidance,
   formatExistingOutlinesForPrompt,
 } from '@/lib/generation/scene-count-guidance';
-import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
+import { MAX_VISION_IMAGES } from '@/lib/constants/generation';
+import { buildPromptPdfContent } from '@/lib/generation/pdf-prompt-context';
 import { nanoid } from 'nanoid';
 import type {
   UserRequirements,
@@ -206,11 +207,16 @@ export async function POST(req: NextRequest) {
     });
     const existingCourseContext = formatExistingOutlinesForPrompt(existingOutlines);
 
+    const promptPdfContent = await buildPromptPdfContent({
+      requirement: requirements.requirement,
+      pdfText,
+    });
+
     const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
       requirement: requirements.requirement,
       language: requirements.language,
-      pdfContent: pdfText
-        ? pdfText.substring(0, MAX_PDF_CONTENT_CHARS)
+      pdfContent: promptPdfContent
+        ? promptPdfContent
         : requirements.language === 'zh-CN'
           ? '无'
           : 'None',

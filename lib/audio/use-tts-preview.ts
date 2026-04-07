@@ -3,11 +3,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   ensureVoicesLoaded,
-  isBrowserTTSAbortError,
   playBrowserTTSPreview,
 } from '@/lib/audio/browser-tts-preview';
 import { buildAudioDataUrl } from '@/lib/audio/audio-format';
-import { formatMediaPlaybackError, isMediaPlaybackStartError, playMediaSafely } from '@/lib/audio/media-playback';
+import { playMediaSafely } from '@/lib/audio/media-playback';
+import { normalizeTTSPreviewError } from '@/lib/audio/tts-preview-errors';
 
 export interface TTSPreviewOptions {
   text: string;
@@ -153,13 +153,9 @@ export function useTTSPreview() {
           cancelRef.current = null;
           setPreviewing(false);
         }
-        if (isMediaPlaybackStartError(error)) {
-          throw new Error(
-            `Browser blocked or rejected audio playback (${formatMediaPlaybackError(error)}). Check autoplay permissions for this site and try again.`,
-          );
-        }
-        if (!isBrowserTTSAbortError(error)) {
-          throw error;
+        const normalizedError = normalizeTTSPreviewError(error);
+        if (normalizedError) {
+          throw normalizedError;
         }
       }
     },

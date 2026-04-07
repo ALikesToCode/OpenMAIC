@@ -53,4 +53,26 @@ describe('selectRelevantPdfContext', () => {
     expect(result.context).toContain('mitochondria');
     expect(result.context).not.toContain('geological rock formation');
   });
+
+  it('preserves markdown structure in the selected context', async () => {
+    const result = await selectRelevantPdfContext({
+      requirement: 'Explain skip connections and optimization degradation',
+      pdfText: [
+        '[Source Document: notes.md]',
+        '## Week 6: ResNet',
+        '- Skip connections solve optimization degradation',
+        '- Residual learning stabilizes ultra-deep networks',
+        '',
+        '## Week 7: MobileNet',
+        '- Depthwise separable convolutions cut compute cost',
+      ].join('\n'),
+      maxChars: 260,
+    });
+
+    expect(result.context).toContain('## Week 6: ResNet');
+    expect(result.context).toContain('- Skip connections solve optimization degradation');
+    expect(result.context).toContain('- Residual learning stabilizes ultra-deep networks');
+    expect(result.context).toContain('\n- Skip connections solve optimization degradation');
+    expect(result.context).not.toContain('## Week 6: ResNet - Skip connections solve');
+  });
 });

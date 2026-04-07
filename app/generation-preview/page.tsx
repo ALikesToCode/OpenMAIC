@@ -21,7 +21,7 @@ import {
 } from '@/lib/utils/image-storage';
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { db } from '@/lib/utils/database';
-import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
+import { MAX_VISION_IMAGES } from '@/lib/constants/generation';
 import { getAudioMimeType } from '@/lib/audio/audio-format';
 import { streamSceneOutlines } from '@/lib/generation/scene-outline-stream';
 import { nanoid } from 'nanoid';
@@ -36,8 +36,6 @@ import {
   type SourceDocumentInput,
 } from '@/lib/utils/source-document';
 import { requestParsedPDF } from '@/lib/pdf/parse-client';
-import { requestRelevantPdfContext } from '@/lib/pdf/context-client';
-import { PDF_AUTO_ROUTE_THRESHOLDS } from '@/lib/pdf/routing';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
 import type {
@@ -332,36 +330,12 @@ function GenerationPreviewContent() {
         );
 
         const resolvedDocuments = resolveSourceDocuments(sourceDocuments, parsedPdfDocuments);
-        let pdfText = resolvedDocuments.pdfText;
+        const pdfText = resolvedDocuments.pdfText;
         const totalParsedPdfPages = parsedPdfDocuments.reduce(
           (sum, document) => sum + (document.pageCount || 0),
           0,
         );
         const warnings: string[] = [];
-
-        if (
-          pdfText.length > MAX_PDF_CONTENT_CHARS ||
-          totalParsedPdfPages >= PDF_AUTO_ROUTE_THRESHOLDS.pageCount
-        ) {
-          try {
-            const relevantContext = await requestRelevantPdfContext({
-              requirement: currentSession.requirements.requirement,
-              pdfText,
-              maxChars: MAX_PDF_CONTENT_CHARS,
-              signal,
-            });
-            pdfText = relevantContext.context;
-          } catch (contextError) {
-            log.warn(
-              'Failed to build relevant PDF context, falling back to truncation:',
-              contextError,
-            );
-            if (pdfText.length > MAX_PDF_CONTENT_CHARS) {
-              pdfText = pdfText.substring(0, MAX_PDF_CONTENT_CHARS);
-              warnings.push(t('generation.textTruncated', { n: MAX_PDF_CONTENT_CHARS }));
-            }
-          }
-        }
 
         const imageStorageIds = await storeImages(resolvedDocuments.pdfImages);
 
