@@ -44,7 +44,7 @@ import { ImageSettings } from './image-settings';
 import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
 import type { ImageProviderId } from '@/lib/media/types';
 import { VideoSettings } from './video-settings';
-import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
+import { VIDEO_PROVIDERS } from '@/lib/media/video-provider-registry';
 import type { VideoProviderId } from '@/lib/media/types';
 import { TTSSettings } from './tts-settings';
 import { TTS_PROVIDERS } from '@/lib/audio/constants';

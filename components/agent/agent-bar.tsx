@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import { resolveAgentVoice, getAvailableProvidersWithVoices } from '@/lib/audio/voice-resolver';
+import { buildAudioDataUrl } from '@/lib/audio/audio-format';
 import { playBrowserTTSPreview } from '@/lib/audio/browser-tts-preview';
 import { playMediaSafely } from '@/lib/audio/media-playback';
 import {
@@ -122,7 +123,7 @@ function AgentVoicePill({
         const data = await res.json();
         if (!data.base64) throw new Error('No audio');
 
-        const audio = new Audio(`data:audio/${data.format || 'mp3'};base64,${data.base64}`);
+        const audio = new Audio(buildAudioDataUrl(data.base64, data.format));
         previewAudioRef.current = audio;
         audio.addEventListener('ended', () => setPreviewingId(null));
         audio.addEventListener('error', () => setPreviewingId(null));
@@ -345,7 +346,7 @@ function TeacherVoicePill({
         if (!res.ok) throw new Error('TTS error');
         const data = await res.json();
         if (!data.base64) throw new Error('No audio');
-        const audio = new Audio(`data:audio/${data.format || 'mp3'};base64,${data.base64}`);
+        const audio = new Audio(buildAudioDataUrl(data.base64, data.format));
         previewAudioRef.current = audio;
         audio.addEventListener('ended', () => setPreviewingId(null));
         audio.addEventListener('error', () => setPreviewingId(null));

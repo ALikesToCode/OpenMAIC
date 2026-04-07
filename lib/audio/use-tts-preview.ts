@@ -6,6 +6,7 @@ import {
   isBrowserTTSAbortError,
   playBrowserTTSPreview,
 } from '@/lib/audio/browser-tts-preview';
+import { getAudioMimeType } from '@/lib/audio/audio-format';
 import { playMediaSafely } from '@/lib/audio/media-playback';
 
 export interface TTSPreviewOptions {
@@ -122,7 +123,7 @@ export function useTTSPreview() {
         const binaryStr = atob(data.base64);
         const bytes = new Uint8Array(binaryStr.length);
         for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-        const blob = new Blob([bytes], { type: `audio/${data.format || 'mp3'}` });
+        const blob = new Blob([bytes], { type: getAudioMimeType(data.format) });
 
         if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
         const url = URL.createObjectURL(blob);

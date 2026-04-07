@@ -50,7 +50,7 @@ function isVoiceCompatibleWithModel(
 
   if (voice.compatibleModelFamilies?.length && providerId === 'navy-tts') {
     const family = inferNavyTTSModelFamily(modelId);
-    return family ? voice.compatibleModelFamilies.includes(family) : false;
+    return family ? voice.compatibleModelFamilies.includes(family) : true;
   }
 
   return !voice.compatibleModels && !voice.compatibleModelFamilies;

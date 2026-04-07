@@ -9,6 +9,7 @@ import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generatio
 import type { AgentInfo } from '@/lib/generation/generation-pipeline';
 import type { Scene } from '@/lib/types/stage';
 import type { Action, SpeechAction } from '@/lib/types/action';
+import { getAudioMimeType } from '@/lib/audio/audio-format';
 import type { TTSProviderId } from '@/lib/audio/types';
 import { splitLongSpeechActions } from '@/lib/audio/tts-utils';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
@@ -162,7 +163,7 @@ export async function generateAndStoreTTS(
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  const blob = new Blob([bytes], { type: `audio/${data.format}` });
+  const blob = new Blob([bytes], { type: getAudioMimeType(data.format) });
   await db.audioFiles.put({
     id: audioId,
     blob,

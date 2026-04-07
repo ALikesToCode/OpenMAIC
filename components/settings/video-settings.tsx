@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
-import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
+import { VIDEO_PROVIDERS } from '@/lib/media/video-provider-registry';
 import { fetchNavyModelsForSurface, toCustomModelEntries } from '@/lib/navy/model-sync';
 import {
   Loader2,
@@ -26,6 +26,12 @@ import type { VideoProviderId } from '@/lib/media/types';
 
 interface VideoSettingsProps {
   selectedProviderId: VideoProviderId;
+}
+
+interface VideoConnectivityResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
 }
 
 export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
@@ -116,13 +122,15 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
           'x-base-url': currentConfig?.baseUrl || '',
         },
       });
-      const data = await response.json();
+      const data = (await response.json()) as VideoConnectivityResponse;
       if (data.success) {
         setTestStatus('success');
         setTestMessage(t('settings.videoConnectivitySuccess'));
       } else {
         setTestStatus('error');
-        setTestMessage(`${t('settings.videoConnectivityFailed')}: ${data.message}`);
+        setTestMessage(
+          `${t('settings.videoConnectivityFailed')}: ${data.message || data.error || 'Unknown error'}`,
+        );
       }
     } catch (err) {
       setTestStatus('error');

@@ -132,4 +132,12 @@ describe('getCompatibleTTSVoices', () => {
     expect(voices.map((voice) => voice.id)).toContain('Puck');
     expect(voices.map((voice) => voice.id)).not.toContain('alloy');
   });
+
+  it('keeps all Navy voices available for unknown custom model families', () => {
+    const voices = getCompatibleTTSVoices('navy-tts', 'acme-custom-voice-model');
+
+    expect(voices.map((voice) => voice.id)).toContain('alloy');
+    expect(voices.map((voice) => voice.id)).toContain('Puck');
+    expect(voices.length).toBeGreaterThan(2);
+  });
 });

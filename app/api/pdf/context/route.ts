@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       maxChars,
     });
 
-    return apiSuccess({ ...result });
+    return apiSuccess({ data: result });
   } catch (error) {
     return apiError(
       'INTERNAL_ERROR',

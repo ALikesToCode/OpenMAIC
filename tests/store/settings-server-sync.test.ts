@@ -131,7 +131,7 @@ vi.mock('@/lib/media/image-providers', () => ({
   },
 }));
 
-vi.mock('@/lib/media/video-providers', () => ({
+vi.mock('@/lib/media/video-provider-registry', () => ({
   VIDEO_PROVIDERS: {
     seedance: {
       id: 'seedance',

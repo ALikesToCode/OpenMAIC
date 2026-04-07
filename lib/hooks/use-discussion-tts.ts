@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
+import { buildAudioDataUrl } from '@/lib/audio/audio-format';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useBrowserTTS } from '@/lib/hooks/use-browser-tts';
 import {
@@ -170,7 +171,7 @@ export function useDiscussionTTS({ enabled, agents, onAudioStateChange }: Discus
       const data = await res.json();
       if (!data.base64) throw new Error('No audio in response');
 
-      const audioUrl = `data:audio/${data.format || 'mp3'};base64,${data.base64}`;
+      const audioUrl = buildAudioDataUrl(data.base64, data.format);
       const audio = new Audio(audioUrl);
       audio.playbackRate = playbackSpeed;
       audio.volume = ttsMuted ? 0 : ttsVolume;
