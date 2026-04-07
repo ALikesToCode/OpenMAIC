@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { playMediaSafely } from '@/lib/audio/media-playback';
+import {
+  formatMediaPlaybackError,
+  isMediaPlaybackStartError,
+  playMediaSafely,
+} from '@/lib/audio/media-playback';
 
 type MediaListener = EventListenerOrEventListenerObject;
 
@@ -68,5 +72,18 @@ describe('playMediaSafely', () => {
     );
 
     await expect(playMediaSafely(media)).rejects.toThrow('speedIndicator');
+  });
+
+  it('classifies DOM playback rejections as media start errors', () => {
+    expect(isMediaPlaybackStartError(new DOMException('Autoplay blocked', 'NotAllowedError'))).toBe(
+      true,
+    );
+    expect(isMediaPlaybackStartError(new Error('provider generation failed'))).toBe(false);
+  });
+
+  it('formats playback errors into stable log strings', () => {
+    expect(
+      formatMediaPlaybackError(new DOMException('The play() request was interrupted', 'AbortError')),
+    ).toBe('AbortError: The play() request was interrupted');
   });
 });

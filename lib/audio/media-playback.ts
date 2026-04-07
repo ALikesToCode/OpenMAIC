@@ -19,6 +19,13 @@ const VIDEO_SPEED_CONTROLLER_ERROR_PATTERNS = [
   'video.vsc',
 ] as const;
 
+const MEDIA_PLAYBACK_REJECTION_NAMES = new Set([
+  'AbortError',
+  'NetworkError',
+  'NotAllowedError',
+  'NotSupportedError',
+]);
+
 function isIgnorableExternalPlaybackError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return VIDEO_SPEED_CONTROLLER_ERROR_PATTERNS.every((pattern) => message.includes(pattern));
@@ -83,4 +90,24 @@ async function isConfirmedExternalPlaybackError(
 
 export function isIgnorableExternalPlaybackErrorMessage(error: unknown): boolean {
   return isIgnorableExternalPlaybackError(error);
+}
+
+export function isMediaPlaybackStartError(error: unknown): boolean {
+  if (error instanceof DOMException) {
+    return MEDIA_PLAYBACK_REJECTION_NAMES.has(error.name);
+  }
+
+  if (error instanceof Error) {
+    return MEDIA_PLAYBACK_REJECTION_NAMES.has(error.name);
+  }
+
+  return false;
+}
+
+export function formatMediaPlaybackError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message ? `${error.name}: ${error.message}` : error.name;
+  }
+
+  return String(error);
 }
