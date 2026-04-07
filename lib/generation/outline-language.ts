@@ -21,10 +21,10 @@ export function resolveOutlineLanguage(
 ): SceneLanguage {
   if (outline.language) return outline.language;
 
+  if (fallbackLanguage) return fallbackLanguage;
+
   const pblLanguage = outline.pblConfig?.language;
   if (pblLanguage) return pblLanguage;
-
-  if (fallbackLanguage) return fallbackLanguage;
 
   const text = [outline.title, outline.description, ...(outline.keyPoints || [])]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
@@ -45,7 +45,7 @@ export function normalizeOutlineLanguage(
     pblConfig: outline.pblConfig
       ? {
           ...outline.pblConfig,
-          language: outline.pblConfig.language || language,
+          language,
         }
       : undefined,
   };

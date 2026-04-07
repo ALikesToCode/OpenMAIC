@@ -11,6 +11,32 @@ import type {
 } from '@/lib/types/generation';
 
 describe('scene language handling', () => {
+  it('lets the caller fallback override hallucinated pblConfig language', () => {
+    const outline: SceneOutline = {
+      id: 'scene-pbl',
+      type: 'pbl',
+      title: 'Model Deployment Project',
+      description: 'Build and present an English-language deployment plan.',
+      keyPoints: ['Deployment checklist', 'Risk review'],
+      order: 1,
+      pblConfig: {
+        projectTopic: 'Model Deployment',
+        projectDescription: 'Create a deployment proposal.',
+        targetSkills: ['Planning', 'Communication'],
+        issueCount: 3,
+        language: 'zh-CN',
+      },
+    };
+
+    expect(resolveOutlineLanguage(outline, 'en-US')).toBe('en-US');
+    expect(normalizeOutlineLanguage(outline, 'en-US')).toMatchObject({
+      language: 'en-US',
+      pblConfig: {
+        language: 'en-US',
+      },
+    });
+  });
+
   it('backfills missing outline language from english content', () => {
     const outline: SceneOutline = {
       id: 'scene-1',
