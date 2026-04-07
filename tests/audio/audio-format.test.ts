@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildAudioDataUrl,
+  buildAudioDataUrlFromBlob,
   getAudioMimeType,
   inferAudioFormatFromBytes,
   inferAudioFormatFromContentType,
@@ -21,6 +22,18 @@ describe('audio-format', () => {
 
   it('builds data urls with the resolved audio mime type', () => {
     expect(buildAudioDataUrl('AQID', 'mp3')).toBe('data:audio/mpeg;base64,AQID');
+  });
+
+  it('builds data urls directly from blobs', async () => {
+    const wavBytes = Uint8Array.from([
+      0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
+      0x66, 0x6d, 0x74, 0x20,
+    ]);
+    const blob = new Blob([wavBytes], { type: 'audio/wav' });
+
+    await expect(buildAudioDataUrlFromBlob(blob, 'wav')).resolves.toMatch(
+      /^data:audio\/wav;base64,/,
+    );
   });
 
   it('falls back safely when format is missing', () => {

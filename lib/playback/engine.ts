@@ -36,6 +36,7 @@ import type {
 import type { AudioPlayer } from '@/lib/utils/audio-player';
 import { ActionEngine } from '@/lib/action/engine';
 import { generateAndStoreTTSAudio } from '@/lib/audio/client-tts';
+import { formatMediaPlaybackError, isMediaPlaybackStartError } from '@/lib/audio/media-playback';
 import { useCanvasStore } from '@/lib/store/canvas';
 import { useSettingsStore } from '@/lib/store/settings';
 import { createLogger } from '@/lib/logger';
@@ -84,6 +85,7 @@ export class PlaybackEngine {
   private browserTTSPausedChunks: string[] = []; // remaining chunks saved on pause (for cancel+re-speak)
   private speechTimerRemaining: number = 0; // remaining ms (set on pause)
   private regeneratedAudioIds: Set<string> = new Set();
+  private activeSpeechRunId: number = 0;
 
   constructor(
     scenes: Scene[],
@@ -230,6 +232,7 @@ export class PlaybackEngine {
 
   /** → idle */
   stop(): void {
+    this.activeSpeechRunId++;
     // Set mode BEFORE stopping audio to prevent spurious processNext from
     // synchronous onend callbacks (see handleUserInterrupt for details).
     this.setMode('idle');
@@ -457,14 +460,18 @@ export class PlaybackEngine {
     switch (action.type) {
       case 'speech': {
         const speechAction = action as SpeechAction;
+        const speechRunId = ++this.activeSpeechRunId;
+        const isCurrentSpeechRun = () =>
+          this.mode === 'playing' && this.activeSpeechRunId === speechRunId;
         this.callbacks.onSpeechStart?.(speechAction.text);
 
         // onEnded → processNext; if paused, resume() will call processNext
         this.audioPlayer.onEnded(() => {
-          this.callbacks.onSpeechEnd?.();
-          if (this.mode === 'playing') {
-            this.processNext();
+          if (!isCurrentSpeechRun()) {
+            return;
           }
+          this.callbacks.onSpeechEnd?.();
+          this.processNext();
         });
 
         // Estimated reading time when no pre-generated audio (TTS disabled).
@@ -495,6 +502,10 @@ export class PlaybackEngine {
         this.audioPlayer
           .play(speechAction.audioId || '', speechAction.audioUrl)
           .then(async (audioStarted) => {
+            if (!isCurrentSpeechRun()) {
+              return;
+            }
+
             if (!audioStarted) {
               const settings = useSettingsStore.getState();
 
@@ -520,19 +531,46 @@ export class PlaybackEngine {
                 }
               }
 
+              if (
+                settings.ttsEnabled &&
+                typeof window !== 'undefined' &&
+                window.speechSynthesis
+              ) {
+                this.playBrowserTTS(speechAction);
+                return;
+              }
+
               scheduleReadingTimer();
             }
           })
           .catch(async (err) => {
-            log.error('TTS error:', err);
+            if (!isCurrentSpeechRun()) {
+              return;
+            }
 
-            try {
-              const recovered = await this.recoverSpeechAudio(speechAction);
-              if (recovered) {
-                return;
+            log.error('TTS error:', formatMediaPlaybackError(err));
+
+            const settings = useSettingsStore.getState();
+            const progressRatio = this.getApproximateAudioProgressRatio();
+
+            if (!isMediaPlaybackStartError(err)) {
+              try {
+                const recovered = await this.recoverSpeechAudio(speechAction);
+                if (recovered) {
+                  return;
+                }
+              } catch (recoveryError) {
+                log.error('TTS recovery failed:', formatMediaPlaybackError(recoveryError));
               }
-            } catch (recoveryError) {
-              log.error('TTS recovery failed:', recoveryError);
+            }
+
+            if (
+              settings.ttsEnabled &&
+              typeof window !== 'undefined' &&
+              window.speechSynthesis
+            ) {
+              this.playBrowserTTS(speechAction, { progressRatio });
+              return;
             }
 
             scheduleReadingTimer();
@@ -644,6 +682,24 @@ export class PlaybackEngine {
 
   // ==================== Browser Native TTS ====================
 
+  private getApproximateAudioProgressRatio(): number | null {
+    const player = this.audioPlayer as Partial<AudioPlayer>;
+    if (
+      typeof player.getCurrentTime !== 'function' ||
+      typeof player.getDuration !== 'function'
+    ) {
+      return null;
+    }
+
+    const currentTime = player.getCurrentTime();
+    const duration = player.getDuration();
+    if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) {
+      return null;
+    }
+
+    return Math.min(1, Math.max(0, currentTime / duration));
+  }
+
   /**
    * Split text into sentence-level chunks for sequential playback.
    * Chrome has a bug where utterances >~15s are silently cut off and onend
@@ -659,13 +715,40 @@ export class PlaybackEngine {
     return chunks.length > 0 ? chunks : [text];
   }
 
+  private getFallbackStartIndex(chunks: string[], progressRatio: number | null): number {
+    if (chunks.length <= 1 || progressRatio === null || progressRatio <= 0) {
+      return 0;
+    }
+
+    const totalChars = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    if (totalChars <= 0) {
+      return 0;
+    }
+
+    const targetChar = totalChars * Math.min(progressRatio, 0.999);
+    let consumedChars = 0;
+    for (let index = 0; index < chunks.length; index++) {
+      consumedChars += chunks[index].length;
+      if (targetChar < consumedChars) {
+        return index;
+      }
+    }
+
+    return chunks.length - 1;
+  }
+
   /**
    * Play text using the Web Speech API (browser-native TTS).
    * Splits text into sentence-level chunks to avoid Chrome's ~15s cutoff.
    * Uses cancel+re-speak for pause/resume (Firefox compatibility).
    */
-  private playBrowserTTS(speechAction: SpeechAction): void {
-    this.browserTTSChunks = this.splitIntoChunks(speechAction.text);
+  private playBrowserTTS(
+    speechAction: SpeechAction,
+    options?: { progressRatio?: number | null },
+  ): void {
+    const chunks = this.splitIntoChunks(speechAction.text);
+    const startIndex = this.getFallbackStartIndex(chunks, options?.progressRatio ?? null);
+    this.browserTTSChunks = chunks.slice(startIndex);
     this.browserTTSChunkIndex = 0;
     this.browserTTSPausedChunks = [];
     this.browserTTSActive = true;

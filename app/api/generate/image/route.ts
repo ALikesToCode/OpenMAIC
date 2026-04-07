@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve dimensions from aspect ratio if not explicitly set
-    if (!body.width && !body.height && body.aspectRatio) {
+    if (!body.width && !body.height && body.aspectRatio && providerId !== 'navy-image') {
       const dims = aspectRatioToDimensions(body.aspectRatio);
       body.width = dims.width;
       body.height = dims.height;
@@ -77,7 +77,8 @@ export async function POST(request: NextRequest) {
 
     return apiSuccess({ result });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message =
+      (error instanceof Error ? error.message : String(error)).trim() || 'Image generation failed';
     // Detect content safety filter rejections (e.g. Seedream OutputImageSensitiveContentDetected)
     if (message.includes('SensitiveContent') || message.includes('sensitive information')) {
       log.warn(`Image blocked by content safety filter: ${message}`);

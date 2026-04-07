@@ -36,9 +36,21 @@ function normalizeBaseUrl(baseUrl?: string): string {
 }
 
 function buildSize(options: ImageGenerationOptions): string | undefined {
-  if (options.aspectRatio) return options.aspectRatio;
-  if (options.width && options.height) return `${options.width}x${options.height}`;
-  return undefined;
+  if (options.aspectRatio) {
+    switch (options.aspectRatio) {
+      case '9:16':
+        return '1024x1536';
+      case '16:9':
+      case '4:3':
+        return '1536x1024';
+      case '1:1':
+      default:
+        return '1024x1024';
+    }
+  }
+
+  const { width, height } = resolveDimensions(options);
+  return `${width}x${height}`;
 }
 
 function resolveDimensions(options: ImageGenerationOptions): { width: number; height: number } {
@@ -80,8 +92,7 @@ export async function testNavyImageConnectivity(
       body: JSON.stringify({
         model: config.model || DEFAULT_MODEL,
         prompt: 'test',
-        size: '1:1',
-        response_format: 'url',
+        size: '1024x1024',
       }),
     });
 
@@ -128,8 +139,6 @@ export async function generateWithNavyImage(
       prompt: options.prompt,
       negative_prompt: options.negativePrompt,
       size,
-      aspect_ratio: options.aspectRatio,
-      response_format: 'url',
       sync: true,
     }),
   });

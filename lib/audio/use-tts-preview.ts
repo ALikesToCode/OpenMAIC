@@ -6,8 +6,8 @@ import {
   isBrowserTTSAbortError,
   playBrowserTTSPreview,
 } from '@/lib/audio/browser-tts-preview';
-import { getAudioMimeType } from '@/lib/audio/audio-format';
-import { playMediaSafely } from '@/lib/audio/media-playback';
+import { buildAudioDataUrl } from '@/lib/audio/audio-format';
+import { formatMediaPlaybackError, isMediaPlaybackStartError, playMediaSafely } from '@/lib/audio/media-playback';
 
 export interface TTSPreviewOptions {
   text: string;
@@ -18,6 +18,12 @@ export interface TTSPreviewOptions {
   apiKey?: string;
   baseUrl?: string;
 }
+
+type TTSPreviewApiResponse = {
+  error?: string;
+  base64?: string;
+  format?: string;
+};
 
 /**
  * Shared hook for TTS preview playback (browser-native and API-based).
@@ -112,21 +118,19 @@ export function useTTSPreview() {
         });
         if (isStale()) return;
 
-        const data = await res.json().catch(() => ({ error: res.statusText }));
+        const data = (await res
+          .json()
+          .catch(() => ({ error: res.statusText }))) as TTSPreviewApiResponse;
         if (isStale()) return;
 
         if (!res.ok || !data.base64) {
           throw new Error(data.error || 'TTS preview failed');
         }
 
-        // Decode base64 → Blob → Object URL
-        const binaryStr = atob(data.base64);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-        const blob = new Blob([bytes], { type: getAudioMimeType(data.format) });
-
-        if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
-        const url = URL.createObjectURL(blob);
+        if (audioUrlRef.current?.startsWith('blob:')) {
+          URL.revokeObjectURL(audioUrlRef.current);
+        }
+        const url = buildAudioDataUrl(data.base64, data.format);
         audioUrlRef.current = url;
 
         const audio = new Audio(url);
@@ -148,6 +152,11 @@ export function useTTSPreview() {
         if (!isStale()) {
           cancelRef.current = null;
           setPreviewing(false);
+        }
+        if (isMediaPlaybackStartError(error)) {
+          throw new Error(
+            `Browser blocked or rejected audio playback (${formatMediaPlaybackError(error)}). Check autoplay permissions for this site and try again.`,
+          );
         }
         if (!isBrowserTTSAbortError(error)) {
           throw error;

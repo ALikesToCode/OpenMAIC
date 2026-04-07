@@ -107,6 +107,28 @@ export function buildAudioDataUrl(base64: string, format?: string): string {
   return `data:${getAudioMimeType(format)};base64,${base64}`;
 }
 
+function encodeBytesToBase64(bytes: Uint8Array): string {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(bytes).toString('base64');
+  }
+
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+export async function buildAudioDataUrlFromBlob(blob: Blob, format?: string): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const detectedFormat =
+    inferAudioFormatFromBytes(bytes) || format || inferAudioFormatFromContentType(blob.type);
+
+  return buildAudioDataUrl(encodeBytesToBase64(bytes), detectedFormat);
+}
+
 export async function normalizeAudioBlobType(blob: Blob, format?: string): Promise<Blob> {
   const declaredFormat = format || inferAudioFormatFromContentType(blob.type);
   const declaredMimeType = getAudioMimeType(declaredFormat);

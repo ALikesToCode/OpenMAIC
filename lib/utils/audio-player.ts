@@ -8,10 +8,15 @@
 
 import { db } from '@/lib/utils/database';
 import { createLogger } from '@/lib/logger';
-import { playMediaSafely } from '@/lib/audio/media-playback';
-import { normalizeAudioBlobType } from '@/lib/audio/audio-format';
+import { formatMediaPlaybackError, playMediaSafely } from '@/lib/audio/media-playback';
+import { buildAudioDataUrlFromBlob, normalizeAudioBlobType } from '@/lib/audio/audio-format';
 
 const log = createLogger('AudioPlayer');
+
+type ManagedAudioElement = HTMLAudioElement & {
+  load?: () => void;
+  removeAttribute?: (qualifiedName: string) => void;
+};
 
 /**
  * Audio player implementation
@@ -22,6 +27,7 @@ export class AudioPlayer {
   private muted: boolean = false;
   private volume: number = 1;
   private playbackRate: number = 1;
+  private currentAudioCleanup: (() => void) | null = null;
 
   /**
    * Play audio (from URL or IndexedDB pre-generated cache)
@@ -36,8 +42,7 @@ export class AudioPlayer {
       const audioRecord = audioId ? await db.audioFiles.get(audioId) : undefined;
 
       if (audioRecord) {
-        // Stop current playback
-        this.stop();
+        this.releaseCurrentAudio();
 
         const normalizedBlob = await normalizeAudioBlobType(audioRecord.blob, audioRecord.format);
         if (normalizedBlob !== audioRecord.blob) {
@@ -51,29 +56,22 @@ export class AudioPlayer {
             });
         }
 
-        // Create audio element
-        this.audio = new Audio();
-
-        // Set audio source
-        const blobUrl = URL.createObjectURL(normalizedBlob);
-        this.audio.src = blobUrl;
-        if (this.muted) this.audio.volume = 0;
-        else this.audio.volume = this.volume;
+        // Create audio element using a data URL instead of a blob URL.
+        // This avoids browser-specific blob playback regressions on cached TTS clips.
+        const audio = new Audio();
+        this.attachAudio(audio);
+        audio.src = await buildAudioDataUrlFromBlob(normalizedBlob, audioRecord.format);
+        if (this.muted) audio.volume = 0;
+        else audio.volume = this.volume;
 
         // Apply playback rate
-        this.audio.defaultPlaybackRate = this.playbackRate;
-        this.audio.playbackRate = this.playbackRate;
-
-        // Set ended callback
-        this.audio.addEventListener('ended', () => {
-          URL.revokeObjectURL(blobUrl);
-          this.onEndedCallback?.();
-        });
+        audio.defaultPlaybackRate = this.playbackRate;
+        audio.playbackRate = this.playbackRate;
 
         // Play
-        await playMediaSafely(this.audio);
+        await playMediaSafely(audio);
         // Re-apply after play() — some browsers reset during load
-        this.audio.playbackRate = this.playbackRate;
+        audio.playbackRate = this.playbackRate;
         return true;
       }
 
@@ -86,25 +84,23 @@ export class AudioPlayer {
 
       // Remote URL fallback (e.g. direct provider/data URL)
       if (audioUrl) {
-        this.stop();
-        this.audio = new Audio();
-        this.audio.src = audioUrl;
-        if (this.muted) this.audio.volume = 0;
-        else this.audio.volume = this.volume;
-        this.audio.defaultPlaybackRate = this.playbackRate;
-        this.audio.playbackRate = this.playbackRate;
-        this.audio.addEventListener('ended', () => {
-          this.onEndedCallback?.();
-        });
-        await playMediaSafely(this.audio);
-        this.audio.playbackRate = this.playbackRate;
+        this.releaseCurrentAudio();
+        const audio = new Audio();
+        this.attachAudio(audio);
+        audio.src = audioUrl;
+        if (this.muted) audio.volume = 0;
+        else audio.volume = this.volume;
+        audio.defaultPlaybackRate = this.playbackRate;
+        audio.playbackRate = this.playbackRate;
+        await playMediaSafely(audio);
+        audio.playbackRate = this.playbackRate;
         return true;
       }
 
       // Pre-generated audio does not exist (yet), let the engine decide the fallback.
       return false;
     } catch (error) {
-      log.error('Failed to play audio:', error);
+      log.error('Failed to play audio:', formatMediaPlaybackError(error));
       throw error;
     }
   }
@@ -122,14 +118,9 @@ export class AudioPlayer {
    * Stop playback
    */
   public stop(): void {
-    if (this.audio) {
-      this.audio.pause();
-      this.audio.currentTime = 0;
-      this.audio = null;
-    }
+    this.releaseCurrentAudio();
     // Note: onEndedCallback intentionally NOT cleared here because play()
     // calls stop() internally — clearing would break the callback chain.
-    // Stale callbacks are harmless: engine mode check prevents processNext().
   }
 
   /**
@@ -216,6 +207,49 @@ export class AudioPlayer {
   public destroy(): void {
     this.stop();
     this.onEndedCallback = null;
+  }
+
+  private attachAudio(audio: HTMLAudioElement): void {
+    const handleEnded = () => {
+      if (this.audio === audio) {
+        this.onEndedCallback?.();
+      }
+    };
+
+    audio.addEventListener('ended', handleEnded);
+    this.currentAudioCleanup = () => {
+      audio.removeEventListener('ended', handleEnded);
+      if (this.audio === audio) {
+        this.audio = null;
+      }
+    };
+    this.audio = audio;
+  }
+
+  private releaseCurrentAudio(): void {
+    const audio = this.audio as ManagedAudioElement | null;
+
+    if (this.currentAudioCleanup) {
+      this.currentAudioCleanup();
+      this.currentAudioCleanup = null;
+    } else {
+      this.audio = null;
+    }
+
+    if (!audio) {
+      return;
+    }
+
+    audio.pause();
+    audio.currentTime = 0;
+
+    try {
+      audio.removeAttribute?.('src');
+      audio.src = '';
+      audio.load?.();
+    } catch (error) {
+      log.debug('Failed to fully release audio element:', error);
+    }
   }
 }
 
