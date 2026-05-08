@@ -6,6 +6,11 @@ import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { getProvider } from '@/lib/ai/providers';
 import type { ModelConfig, ModelInfo, ProviderId, ThinkingConfig } from '@/lib/types/provider';
+import { getCatalogThinkingCapability } from './model-metadata';
+import { getDefaultThinkingConfig, getThinkingMode, pickThinkingBudget } from './thinking-config';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AIProviderModel');
 
 /**
  * Model instance with its configuration info.
@@ -25,37 +30,109 @@ function getProviderConfig(providerId: ProviderId) {
  */
 function getCompatThinkingBodyParams(
   providerId: ProviderId,
+  modelId: string,
   config: ThinkingConfig,
 ): Record<string, unknown> | undefined {
-  if (config.enabled === false) {
-    switch (providerId) {
-      case 'kimi':
-      case 'deepseek':
-      case 'glm':
+  const capability = getCatalogThinkingCapability(providerId, modelId);
+  if (!capability || capability.control === 'none') return undefined;
+
+  const mode = getThinkingMode(config);
+  const budget = pickThinkingBudget(capability, config);
+
+  switch (capability.requestAdapter) {
+    case 'kimi':
+    case 'glm':
+    case 'xiaomi':
+      if (mode === 'disabled') return { thinking: { type: 'disabled' } };
+      if (mode === 'enabled') return { thinking: { type: 'enabled' } };
+      return undefined;
+
+    case 'deepseek': {
+      if (mode === 'disabled' || config.effort === 'none') {
         return { thinking: { type: 'disabled' } };
-      case 'qwen':
-      case 'siliconflow':
-        return { enable_thinking: false };
-      default:
-        return undefined;
-    }
-  }
+      }
 
-  if (config.enabled === true) {
-    switch (providerId) {
-      case 'kimi':
-      case 'deepseek':
-      case 'glm':
-        return { thinking: { type: 'enabled' } };
-      case 'qwen':
-      case 'siliconflow':
-        return { enable_thinking: true };
-      default:
-        return undefined;
+      const effort = config.effort === 'max' || config.effort === 'xhigh' ? 'max' : 'high';
+      return { thinking: { type: 'enabled' }, reasoning_effort: effort };
     }
-  }
 
-  return undefined;
+    case 'qwen': {
+      if (mode === 'disabled') return { enable_thinking: false };
+      const body: Record<string, unknown> = {};
+      if (mode === 'enabled') body.enable_thinking = true;
+      if (budget !== undefined) body.thinking_budget = budget;
+      return Object.keys(body).length > 0 ? body : undefined;
+    }
+
+    case 'siliconflow': {
+      const body: Record<string, unknown> = {};
+      if (capability.control === 'toggle-budget') {
+        if (mode === 'disabled') body.enable_thinking = false;
+        if (mode === 'enabled') body.enable_thinking = true;
+      }
+      if (budget !== undefined) body.thinking_budget = budget;
+      return Object.keys(body).length > 0 ? body : undefined;
+    }
+
+    case 'doubao': {
+      if (capability.control === 'effort') {
+        const effort =
+          mode === 'disabled'
+            ? 'minimal'
+            : config.effort && capability.effortValues?.includes(config.effort)
+              ? config.effort
+              : mode === 'enabled'
+                ? capability.defaultEffort
+                : undefined;
+        return effort ? { reasoning_effort: effort } : undefined;
+      }
+      if (mode === 'auto') return { thinking: { type: 'auto' } };
+      if (mode === 'disabled') return { thinking: { type: 'disabled' } };
+      if (mode === 'enabled') return { thinking: { type: 'enabled' } };
+      return undefined;
+    }
+
+    case 'openrouter': {
+      const reasoning: Record<string, unknown> = {};
+      if (mode === 'disabled') reasoning.enabled = false;
+      if (mode === 'enabled') reasoning.enabled = true;
+      if (config.effort) reasoning.effort = config.effort;
+      if (budget !== undefined) reasoning.max_tokens = budget;
+      if (typeof config.excludeReasoningOutput === 'boolean') reasoning.exclude = config.excludeReasoningOutput;
+      return Object.keys(reasoning).length > 0 ? { reasoning } : undefined;
+    }
+
+    case 'hunyuan': {
+      let reasoningEffort: 'no_think' | 'low' | 'high' | undefined;
+      if (mode === 'disabled' || config.effort === 'none') {
+        reasoningEffort = 'no_think';
+      } else if (config.effort === 'high' || config.effort === 'max' || config.effort === 'xhigh') {
+        reasoningEffort = 'high';
+      } else if (
+        config.effort === 'low' ||
+        config.effort === 'medium' ||
+        config.effort === 'minimal'
+      ) {
+        reasoningEffort = 'low';
+      } else if (mode === 'enabled') {
+        reasoningEffort = capability.defaultEffort === 'high' ? 'high' : 'low';
+      }
+      return reasoningEffort ? { chat_template_kwargs: { reasoning_effort: reasoningEffort } } : undefined;
+    }
+
+    case 'lemonade': {
+      const chatTemplateKwargs: Record<string, unknown> = {
+        enable_thinking: mode === 'enabled',
+      };
+      if (mode === 'enabled' && budget !== undefined) {
+        chatTemplateKwargs.thinking_budget = budget;
+      }
+      return { chat_template_kwargs: chatTemplateKwargs };
+    }
+
+    default:
+      return undefined;
+  }
 }
 
 function normalizeMiniMaxAnthropicBaseUrl(
@@ -74,6 +151,16 @@ function normalizeMiniMaxAnthropicBaseUrl(
     return `${trimmed}/v1`;
   }
   return `${trimmed}/anthropic/v1`;
+}
+
+function shouldUseOpenAIResponsesApi(providerId: ProviderId, modelId: string): boolean {
+  if (providerId !== 'openai') return false;
+
+  return (
+    /^gpt-5\.\d+-pro(?:-|$)/.test(modelId) ||
+    /^gpt-5\.5(?:-|$)/.test(modelId) ||
+    /^gpt-5\.[3-9]-codex(?:-|$)/.test(modelId)
+  );
 }
 
 /**
@@ -119,11 +206,23 @@ export function getModel(config: ModelConfig): ModelWithInfo {
             | { getStore?: () => unknown }
             | undefined;
           const thinking = thinkingCtx?.getStore?.() as ThinkingConfig | undefined;
-          if (thinking && init?.body && typeof init.body === 'string') {
-            const extra = getCompatThinkingBodyParams(providerId, thinking);
+          const effectiveThinking =
+            thinking ??
+            (providerId === 'lemonade'
+              ? getDefaultThinkingConfig(getCatalogThinkingCapability(providerId, config.modelId))
+              : undefined);
+          if (effectiveThinking && init?.body && typeof init.body === 'string') {
+            const extra = getCompatThinkingBodyParams(
+              providerId,
+              config.modelId,
+              effectiveThinking,
+            );
             if (extra) {
               try {
                 const body = JSON.parse(init.body);
+                if (providerId === 'lemonade' && 'stream_options' in body) {
+                  delete body.stream_options;
+                }
                 Object.assign(body, extra);
                 init = { ...init, body: JSON.stringify(body) };
               } catch {
@@ -131,12 +230,51 @@ export function getModel(config: ModelConfig): ModelWithInfo {
               }
             }
           }
-          return globalThis.fetch(url, init);
+          const response = await globalThis.fetch(url, init);
+
+          if (providerId !== 'lemonade') {
+            return response;
+          }
+
+          let isStreamingRequest = false;
+          if (init?.body && typeof init.body === 'string') {
+            try {
+              const requestBody = JSON.parse(init.body);
+              isStreamingRequest = requestBody?.stream === true;
+            } catch {
+              /* ignore request-body inspection failure */
+            }
+          }
+
+          if (isStreamingRequest) {
+            return response;
+          }
+
+          try {
+            const cloned = response.clone();
+            const text = await cloned.text();
+
+            try {
+              JSON.parse(text);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              const contentType = response.headers.get('content-type') || '';
+              log.warn(
+                `[Lemonade] Invalid JSON response from OpenAI-compatible path: status=${response.status}, contentType=${contentType || 'n/a'}, bodyLen=${text.length}, first=${JSON.stringify(text.slice(0, 500))}, last=${JSON.stringify(text.slice(Math.max(0, text.length - 500)))}, parseError=${message}`,
+              );
+            }
+          } catch (error) {
+            log.warn('[Lemonade] Failed to inspect JSON response body:', error);
+          }
+
+          return response;
         };
       }
 
       const openai = createOpenAI(openaiOptions);
-      model = openai.chat(config.modelId);
+      model = shouldUseOpenAIResponsesApi(config.providerId, config.modelId)
+        ? openai.responses(config.modelId)
+        : openai.chat(config.modelId);
       break;
     }
 

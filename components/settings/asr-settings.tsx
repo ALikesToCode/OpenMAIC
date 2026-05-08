@@ -1,9 +1,19 @@
 'use client';
 
-import { useMemo, useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -11,18 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { fetchNavyModelsForSurface, toCustomModelEntries } from '@/lib/navy/model-sync';
-import {
-  getAudioRecordingExtension,
-  getPreferredAudioRecorderMimeType,
-} from '@/lib/audio/media-recorder-format';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { ASR_PROVIDERS } from '@/lib/audio/constants';
 import type { ASRProviderId } from '@/lib/audio/types';
-import { Mic, MicOff, CheckCircle2, XCircle, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { isCustomASRProvider } from '@/lib/audio/types';
+import { Mic, MicOff, CheckCircle2, XCircle, Eye, EyeOff, Plus, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
+import { normalizeASRUploadAudio } from '@/lib/audio/wav-utils';
 
 const log = createLogger('ASRSettings');
 
@@ -36,16 +44,24 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
   const asrLanguage = useSettingsStore((state) => state.asrLanguage);
   const asrProvidersConfig = useSettingsStore((state) => state.asrProvidersConfig);
   const setASRProviderConfig = useSettingsStore((state) => state.setASRProviderConfig);
+  const removeCustomASRProvider = useSettingsStore((state) => state.removeCustomASRProvider);
 
-  const asrProvider = ASR_PROVIDERS[selectedProviderId] ?? ASR_PROVIDERS['openai-whisper'];
-  const isServerConfigured = !!asrProvidersConfig[selectedProviderId]?.isServerConfigured;
+  const asrProvider = ASR_PROVIDERS[selectedProviderId as keyof typeof ASR_PROVIDERS];
+  const isCustom = isCustomASRProvider(selectedProviderId);
+  const providerConfig = asrProvidersConfig[selectedProviderId];
+  const isServerConfigured = !!providerConfig?.isServerConfigured;
+  const requiresApiKey = isCustom
+    ? !!providerConfig?.requiresApiKey
+    : !!asrProvider?.requiresApiKey;
+  const isKeylessLocalProvider = !isCustom && !requiresApiKey && !!asrProvider?.defaultBaseUrl;
 
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [asrResult, setASRResult] = useState('');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
-  const [syncingModels, setSyncingModels] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
   // Reset state when provider changes (derived state pattern)
@@ -57,55 +73,6 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
     setTestMessage('');
     setASRResult('');
   }
-
-  const customModels = useMemo(
-    () => asrProvidersConfig[selectedProviderId]?.customModels || [],
-    [asrProvidersConfig, selectedProviderId],
-  );
-  const allModels = useMemo(() => {
-    const builtInModels = asrProvider.models || [];
-    const builtInIds = new Set(builtInModels.map((model) => model.id));
-    return [...builtInModels, ...customModels.filter((model) => !builtInIds.has(model.id))];
-  }, [asrProvider.models, customModels]);
-
-  const handleSyncNavyModels = async () => {
-    if (selectedProviderId !== 'navy-asr') return;
-
-    setSyncingModels(true);
-    setTestStatus('idle');
-    setTestMessage('');
-
-    try {
-      const remoteModels = await fetchNavyModelsForSurface('asr');
-      const syncedModels = toCustomModelEntries(remoteModels);
-      const builtInIds = new Set(asrProvider.models.map((model) => model.id));
-      const mergedCustomModels = syncedModels.filter((model) => !builtInIds.has(model.id));
-
-      const currentModelId =
-        asrProvidersConfig[selectedProviderId]?.modelId || asrProvider.defaultModelId;
-      const availableModelIds = new Set([
-        ...asrProvider.models.map((model) => model.id),
-        ...mergedCustomModels.map((model) => model.id),
-      ]);
-
-      setASRProviderConfig(selectedProviderId, {
-        customModels: mergedCustomModels,
-        modelId:
-          currentModelId && availableModelIds.has(currentModelId)
-            ? currentModelId
-            : asrProvider.defaultModelId || mergedCustomModels[0]?.id || '',
-      });
-
-      setTestStatus('success');
-      setTestMessage(t('settings.modelSyncSuccess'));
-    } catch (error) {
-      log.error('Failed to sync Navy ASR models:', error);
-      setTestStatus('error');
-      setTestMessage(error instanceof Error ? error.message : t('settings.modelSyncFailed'));
-    } finally {
-      setSyncingModels(false);
-    }
-  };
 
   const handleToggleASRRecording = async () => {
     if (isRecording) {
@@ -154,12 +121,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
           const stream = await navigator.mediaDevices.getUserMedia({
             audio: true,
           });
-          const preferredMimeType = getPreferredAudioRecorderMimeType(MediaRecorder);
-          const mediaRecorder = preferredMimeType
-            ? new MediaRecorder(stream, { mimeType: preferredMimeType })
-            : new MediaRecorder(stream);
-          const resolvedMimeType = mediaRecorder.mimeType || preferredMimeType || 'audio/webm';
-          const fileName = `recording.${getAudioRecordingExtension(resolvedMimeType)}`;
+          const mediaRecorder = new MediaRecorder(stream);
           mediaRecorderRef.current = mediaRecorder;
           const audioChunks: Blob[] = [];
           mediaRecorder.ondataavailable = (event) => {
@@ -167,30 +129,43 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
           };
           mediaRecorder.onstop = async () => {
             stream.getTracks().forEach((track) => track.stop());
-            const audioBlob = new Blob(audioChunks, { type: resolvedMimeType });
-            const formData = new FormData();
-            formData.append('audio', audioBlob, fileName);
-            formData.append('providerId', selectedProviderId);
-            formData.append(
-              'modelId',
-              asrProvidersConfig[selectedProviderId]?.modelId || asrProvider.defaultModelId,
-            );
-            formData.append('language', asrLanguage);
-            const apiKeyValue = asrProvidersConfig[selectedProviderId]?.apiKey;
-            if (apiKeyValue?.trim()) formData.append('apiKey', apiKeyValue);
-            const baseUrlValue = asrProvidersConfig[selectedProviderId]?.baseUrl;
-            if (baseUrlValue?.trim()) formData.append('baseUrl', baseUrlValue);
+            setIsProcessing(true);
 
             try {
+              const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+              const uploadAudio = await normalizeASRUploadAudio(selectedProviderId, audioBlob);
+              const formData = new FormData();
+              formData.append('audio', uploadAudio.blob, uploadAudio.fileName);
+              formData.append('providerId', selectedProviderId);
+              formData.append(
+                'modelId',
+                asrProvidersConfig[selectedProviderId]?.modelId ||
+                  asrProvider?.defaultModelId ||
+                  '',
+              );
+              formData.append('language', asrLanguage);
+              const apiKeyValue = asrProvidersConfig[selectedProviderId]?.apiKey;
+              if (apiKeyValue?.trim()) formData.append('apiKey', apiKeyValue);
+              const baseUrlValue =
+                asrProvidersConfig[selectedProviderId]?.baseUrl ||
+                providerConfig?.customDefaultBaseUrl ||
+                '';
+              if (baseUrlValue?.trim()) formData.append('baseUrl', baseUrlValue);
+
               const response = await fetch('/api/transcription', {
                 method: 'POST',
                 body: formData,
               });
               if (response.ok) {
                 const data = await response.json();
-                setASRResult(data.text);
-                setTestStatus('success');
-                setTestMessage(t('settings.asrTestSuccess'));
+                if (data.text?.trim()) {
+                  setASRResult(data.text);
+                  setTestStatus('success');
+                  setTestMessage(t('settings.asrTestSuccess'));
+                } else {
+                  setTestStatus('error');
+                  setTestMessage(data.error || t('settings.asrNoTranscription'));
+                }
               } else {
                 setTestStatus('error');
                 const errorData = await response
@@ -201,7 +176,13 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
             } catch (error) {
               log.error('ASR test failed:', error);
               setTestStatus('error');
-              setTestMessage(t('settings.asrTestFailed'));
+              setTestMessage(
+                error instanceof Error && error.message
+                  ? `${t('settings.asrTestFailed')}: ${error.message}`
+                  : t('settings.asrTestFailed'),
+              );
+            } finally {
+              setIsProcessing(false);
             }
           };
           mediaRecorder.start();
@@ -224,8 +205,15 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
         </div>
       )}
 
+      {/* No models warning for custom providers */}
+      {isCustom && ((providerConfig?.customModels as Array<{ id: string }>) || []).length === 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3 text-sm text-amber-700 dark:text-amber-300">
+          {t('settings.noModelsWarning')}
+        </div>
+      )}
+
       {/* API Key & Base URL */}
-      {(asrProvider.requiresApiKey || isServerConfigured) && (
+      {(requiresApiKey || isServerConfigured || isCustom || isKeylessLocalProvider) && (
         <>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -266,7 +254,11 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                placeholder={asrProvider.defaultBaseUrl || t('settings.enterCustomBaseUrl')}
+                placeholder={
+                  isCustom
+                    ? providerConfig?.customDefaultBaseUrl || 'http://localhost:8000/v1'
+                    : asrProvider?.defaultBaseUrl || t('settings.enterCustomBaseUrl')
+                }
                 value={asrProvidersConfig[selectedProviderId]?.baseUrl || ''}
                 onChange={(e) =>
                   setASRProviderConfig(selectedProviderId, {
@@ -280,17 +272,23 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
           {/* Request URL Preview */}
           {(() => {
             const effectiveBaseUrl =
-              asrProvidersConfig[selectedProviderId]?.baseUrl || asrProvider.defaultBaseUrl || '';
+              asrProvidersConfig[selectedProviderId]?.baseUrl ||
+              (isCustom ? providerConfig?.customDefaultBaseUrl : asrProvider?.defaultBaseUrl) ||
+              '';
             if (!effectiveBaseUrl) return null;
             let endpointPath = '';
-            switch (selectedProviderId) {
-              case 'openai-whisper':
-              case 'navy-asr':
-                endpointPath = '/audio/transcriptions';
-                break;
-              case 'qwen-asr':
-                endpointPath = '/services/aigc/multimodal-generation/generation';
-                break;
+            if (isCustom) {
+              endpointPath = '/audio/transcriptions';
+            } else {
+              switch (selectedProviderId) {
+                case 'openai-whisper':
+                case 'lemonade-asr':
+                  endpointPath = '/audio/transcriptions';
+                  break;
+                case 'qwen-asr':
+                  endpointPath = '/services/aigc/multimodal-generation/generation';
+                  break;
+              }
             }
             if (!endpointPath) return null;
             return (
@@ -315,13 +313,19 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
           <Button
             onClick={handleToggleASRRecording}
             disabled={
-              asrProvider.requiresApiKey &&
-              !asrProvidersConfig[selectedProviderId]?.apiKey?.trim() &&
-              !isServerConfigured
+              isProcessing ||
+              (requiresApiKey &&
+                !asrProvidersConfig[selectedProviderId]?.apiKey?.trim() &&
+                !isServerConfigured)
             }
             className="gap-2 w-[140px]"
           >
-            {isRecording ? (
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t('settings.asrProcessing')}
+              </>
+            ) : isRecording ? (
               <>
                 <MicOff className="h-4 w-4" />
                 {t('settings.stopRecording')}
@@ -354,37 +358,19 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
         </div>
       )}
 
-      {/* Model Selection */}
-      {allModels.length > 0 && (
+      {/* Model Selection — built-in providers */}
+      {!isCustom && asrProvider?.models?.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <Label className="text-sm">{t('settings.asrModel')}</Label>
-            {selectedProviderId === 'navy-asr' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSyncNavyModels}
-                disabled={syncingModels}
-                className="gap-1.5"
-              >
-                {syncingModels ? (
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5" />
-                )}
-                {t('settings.syncNavyModels')}
-              </Button>
-            )}
-          </div>
+          <Label className="text-sm">{t('settings.defaultModel')}</Label>
           <Select
-            value={asrProvidersConfig[selectedProviderId]?.modelId || asrProvider.defaultModelId}
+            value={asrProvidersConfig[selectedProviderId]?.modelId || asrProvider?.defaultModelId}
             onValueChange={(value) => setASRProviderConfig(selectedProviderId, { modelId: value })}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {allModels.map((model) => (
+              {asrProvider?.models.map((model) => (
                 <SelectItem key={model.id} value={model.id}>
                   {model.name}
                 </SelectItem>
@@ -393,6 +379,188 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
           </Select>
         </div>
       )}
+
+      {/* Model Management — custom providers */}
+      {isCustom && (
+        <div className="space-y-3">
+          <Label className="text-sm">{t('settings.availableModels')}</Label>
+          {(() => {
+            const customModels =
+              (providerConfig?.customModels as Array<{ id: string; name: string }>) || [];
+            const activeModelId =
+              asrProvidersConfig[selectedProviderId]?.modelId || customModels[0]?.id || '';
+            return (
+              <>
+                {customModels.length > 0 ? (
+                  <div className="rounded-lg border border-border/60 overflow-hidden">
+                    <div className="grid grid-cols-[20px_1fr_1fr_36px] gap-0 bg-muted/40 px-3 py-1.5 border-b border-border/40">
+                      <span />
+                      <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                        ID
+                      </span>
+                      <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                        {t('settings.modelNamePlaceholder')}
+                      </span>
+                      <span />
+                    </div>
+                    {customModels.map((model, index) => {
+                      const isActive = model.id === activeModelId;
+                      return (
+                        <div
+                          key={model.id}
+                          onClick={() =>
+                            setASRProviderConfig(selectedProviderId, { modelId: model.id })
+                          }
+                          className={cn(
+                            'grid grid-cols-[20px_1fr_1fr_36px] gap-0 items-center px-3 py-2 group cursor-pointer transition-colors',
+                            isActive ? 'bg-primary/5' : 'hover:bg-muted/20',
+                            index > 0 && 'border-t border-border/30',
+                          )}
+                        >
+                          <div className="flex items-center -ml-1">
+                            <div
+                              className={cn(
+                                'size-4 rounded-full border-2 flex items-center justify-center transition-colors',
+                                isActive
+                                  ? 'border-primary'
+                                  : 'border-muted-foreground/30 group-hover:border-muted-foreground/50',
+                              )}
+                            >
+                              {isActive && <div className="size-2 rounded-full bg-primary" />}
+                            </div>
+                          </div>
+                          <span className="text-sm font-mono text-foreground/80 truncate pr-3">
+                            {model.id}
+                          </span>
+                          <span className="text-sm text-foreground/60 truncate pr-3">
+                            {model.name}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const models = [...customModels];
+                              models.splice(index, 1);
+                              const newModelId = isActive ? models[0]?.id || '' : activeModelId;
+                              setASRProviderConfig(selectedProviderId, {
+                                customModels: models,
+                                modelId: newModelId,
+                              });
+                            }}
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground/50 italic">
+                    {t('settings.noModelsAdded')}
+                  </p>
+                )}
+                <AddModelRow
+                  existingIds={customModels.map((m) => m.id)}
+                  onAdd={(modelId, modelName) => {
+                    const models = [...customModels, { id: modelId, name: modelName }];
+                    setASRProviderConfig(selectedProviderId, {
+                      customModels: models,
+                      modelId: activeModelId || modelId,
+                    });
+                  }}
+                />
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Delete Custom Provider */}
+      {isCustom && (
+        <div className="pt-4 border-t">
+          <Button variant="destructive" size="sm" onClick={() => setShowDeleteConfirm(true)}>
+            {t('settings.deleteProvider')}
+          </Button>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={showDeleteConfirm}
+        onOpenChange={(open) => !open && setShowDeleteConfirm(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('settings.deleteProvider')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('settings.deleteProviderConfirm')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('settings.cancelEdit')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                removeCustomASRProvider(selectedProviderId);
+                setShowDeleteConfirm(false);
+              }}
+            >
+              {t('settings.deleteProvider')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function AddModelRow({
+  onAdd,
+  existingIds,
+}: {
+  onAdd: (id: string, name: string) => void;
+  existingIds: string[];
+}) {
+  const { t } = useI18n();
+  const [modelId, setModelId] = useState('');
+  const [modelName, setModelName] = useState('');
+
+  const handleAdd = () => {
+    if (!modelId.trim()) return;
+    if (existingIds.includes(modelId.trim())) {
+      toast.error('Duplicate ID');
+      return;
+    }
+    onAdd(modelId.trim(), modelName.trim() || modelId.trim());
+    setModelId('');
+    setModelName('');
+  };
+
+  return (
+    <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+      <Input
+        value={modelId}
+        onChange={(e) => setModelId(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+        className="text-sm font-mono"
+        placeholder={t('settings.modelIdPlaceholder')}
+      />
+      <Input
+        value={modelName}
+        onChange={(e) => setModelName(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+        className="text-sm"
+        placeholder={t('settings.modelNamePlaceholder')}
+      />
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleAdd}
+        disabled={!modelId.trim()}
+        className="shrink-0 gap-1"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        {t('settings.addModel')}
+      </Button>
     </div>
   );
 }

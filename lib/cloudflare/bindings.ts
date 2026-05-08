@@ -19,8 +19,10 @@ export interface PDFJobRecordWithResult extends PDFJobRecord {
   result?: ParsedPdfContent;
 }
 
-export interface CloudflareBindings
-  extends Pick<Env, 'PDF_JOB_ARTIFACTS' | 'PDF_JOBS_DB' | 'PDF_JOB_DO' | 'MINERU_CONTAINER'> {}
+export type CloudflareBindings = Pick<
+  Env,
+  'PDF_JOB_ARTIFACTS' | 'PDF_JOBS_DB' | 'PDF_JOB_DO' | 'MINERU_CONTAINER'
+>;
 
 export async function getCloudflareBindings(): Promise<CloudflareBindings> {
   const { env } = await import('cloudflare:workers');

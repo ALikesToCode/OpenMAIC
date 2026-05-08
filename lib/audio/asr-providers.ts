@@ -148,6 +148,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { experimental_transcribe as transcribe } from 'ai';
 import type { ASRModelConfig } from './types';
+import { isCustomASRProvider } from './types';
 import { ASR_PROVIDERS } from './constants';
 
 /**
@@ -164,13 +165,10 @@ export async function transcribeAudio(
   config: ASRModelConfig,
   audioBuffer: Buffer | Blob,
 ): Promise<ASRTranscriptionResult> {
-  const provider = ASR_PROVIDERS[config.providerId];
-  if (!provider) {
-    throw new Error(`Unknown ASR provider: ${config.providerId}`);
-  }
+  const provider = ASR_PROVIDERS[config.providerId as keyof typeof ASR_PROVIDERS];
 
-  // Validate API key if required
-  if (provider.requiresApiKey && !config.apiKey) {
+  // Validate API key if required (only for built-in providers with known config)
+  if (provider?.requiresApiKey && !config.apiKey) {
     throw new Error(`API key required for ASR provider: ${config.providerId}`);
   }
 
@@ -184,12 +182,192 @@ export async function transcribeAudio(
     case 'qwen-asr':
       return await transcribeQwenASR(config, audioBuffer);
 
+    case 'lemonade-asr':
+      return await transcribeLemonadeASR(config, audioBuffer);
+
     case 'navy-asr':
       return await transcribeNavyASR(config, audioBuffer);
 
     default:
+      if (isCustomASRProvider(config.providerId)) {
+        return await transcribeOpenAIWhisper(config, audioBuffer);
+      }
       throw new Error(`Unsupported ASR provider: ${config.providerId}`);
   }
+}
+
+/**
+ * Lemonade ASR implementation (OpenAI-compatible multipart transcription).
+ *
+ * Lemonade currently supports WAV input and JSON response format.
+ */
+async function transcribeLemonadeASR(
+  config: ASRModelConfig,
+  audioBuffer: Buffer | Blob,
+): Promise<ASRTranscriptionResult> {
+  const baseUrl = (config.baseUrl || ASR_PROVIDERS['lemonade-asr'].defaultBaseUrl || '').replace(
+    /\/$/,
+    '',
+  );
+
+  const audioBlob = await toAudioBlob(audioBuffer);
+  if (!(await isWavAudio(audioBlob))) {
+    throw new Error(
+      'Lemonade ASR currently supports WAV input only. Recordings should be converted to WAV before upload.',
+    );
+  }
+
+  const formData = new FormData();
+  formData.set('file', audioBlob, 'audio.wav');
+  formData.set('model', config.modelId || ASR_PROVIDERS['lemonade-asr'].defaultModelId);
+  formData.set('response_format', 'json');
+  if (config.language && config.language !== 'auto') {
+    formData.set('language', config.language);
+  }
+
+  const response = await fetch(`${baseUrl}/audio/transcriptions`, {
+    method: 'POST',
+    headers: getOptionalBearerAuthHeaders(config.apiKey),
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => response.statusText);
+    if (errorText.includes('audio is empty') || errorText.includes('too short')) {
+      return { text: '' };
+    }
+    throw new Error(`Lemonade ASR API error: ${errorText || response.statusText}`);
+  }
+
+  const data = await response.json();
+  return { text: typeof data.text === 'string' ? data.text : '' };
+}
+
+/**
+ * Navy ASR implementation (OpenAI-compatible multipart transcription).
+ */
+async function transcribeNavyASR(
+  config: ASRModelConfig,
+  audioBuffer: Buffer | Blob,
+): Promise<ASRTranscriptionResult> {
+  const baseUrl = (config.baseUrl || ASR_PROVIDERS['navy-asr'].defaultBaseUrl || '').replace(
+    /\/$/,
+    '',
+  );
+  const audioBlob = await toAudioBlob(audioBuffer);
+  const extension = audioBlob.type.includes('wav')
+    ? 'wav'
+    : audioBlob.type.includes('mpeg') || audioBlob.type.includes('mp3')
+      ? 'mp3'
+      : audioBlob.type.includes('mp4') || audioBlob.type.includes('m4a')
+        ? 'm4a'
+        : 'webm';
+
+  const formData = new FormData();
+  formData.set('file', audioBlob, `audio.${extension}`);
+  formData.set('model', config.modelId || ASR_PROVIDERS['navy-asr'].defaultModelId);
+  formData.set('response_format', 'json');
+  if (config.language && config.language !== 'auto') {
+    formData.set('language', config.language);
+  }
+
+  const response = await fetch(`${baseUrl}/audio/transcriptions`, {
+    method: 'POST',
+    headers: getOptionalBearerAuthHeaders(config.apiKey),
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => response.statusText);
+    if (errorText.includes('audio is empty') || errorText.includes('too short')) {
+      return { text: '' };
+    }
+    throw new Error(`Navy ASR API error: ${errorText || response.statusText}`);
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return parseNavyASRResponse(await response.json());
+  }
+
+  return parseNavyASRResponse(await response.text());
+}
+
+export function parseNavyASRResponse(data: unknown): ASRTranscriptionResult {
+  if (typeof data === 'string') {
+    return { text: data };
+  }
+
+  if (!data || typeof data !== 'object') {
+    return { text: '' };
+  }
+
+  const record = data as Record<string, unknown>;
+  if (typeof record.text === 'string') {
+    return { text: record.text };
+  }
+
+  const choices = (record.output as { choices?: unknown[] } | undefined)?.choices;
+  const firstChoice = Array.isArray(choices) ? choices[0] : undefined;
+  const content = (firstChoice as { message?: { content?: unknown } } | undefined)?.message
+    ?.content;
+  if (Array.isArray(content)) {
+    const firstText = content.find(
+      (item): item is { text: string } =>
+        !!item && typeof item === 'object' && typeof (item as { text?: unknown }).text === 'string',
+    );
+    return { text: firstText?.text || '' };
+  }
+
+  return { text: '' };
+}
+
+async function toAudioBlob(audioBuffer: Buffer | Blob): Promise<Blob> {
+  if (audioBuffer instanceof Blob) {
+    return audioBuffer;
+  }
+  if (audioBuffer instanceof Buffer) {
+    const arrayBuffer = audioBuffer.buffer.slice(
+      audioBuffer.byteOffset,
+      audioBuffer.byteOffset + audioBuffer.byteLength,
+    ) as ArrayBuffer;
+    return new Blob([arrayBuffer], { type: detectWavBuffer(audioBuffer) ? 'audio/wav' : '' });
+  }
+  throw new Error('Invalid audio buffer type');
+}
+
+async function isWavAudio(blob: Blob): Promise<boolean> {
+  if (blob.type.includes('audio/wav') || blob.type.includes('audio/x-wav')) {
+    return true;
+  }
+
+  if (blob instanceof File && /\.wav$/i.test(blob.name)) {
+    return true;
+  }
+
+  const header = await blob.slice(0, 12).arrayBuffer();
+  return detectWavBytes(new Uint8Array(header));
+}
+
+function detectWavBuffer(buffer: Buffer): boolean {
+  return (
+    buffer.byteLength >= 12 &&
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WAVE'
+  );
+}
+
+function detectWavBytes(bytes: Uint8Array): boolean {
+  return (
+    bytes.byteLength >= 12 &&
+    String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' &&
+    String.fromCharCode(...bytes.slice(8, 12)) === 'WAVE'
+  );
+}
+
+function getOptionalBearerAuthHeaders(apiKey?: string): Record<string, string> {
+  const key = apiKey?.trim();
+  return key ? { Authorization: `Bearer ${key}` } : {};
 }
 
 /**
@@ -235,118 +413,6 @@ async function transcribeOpenAIWhisper(
     }
     throw error;
   }
-}
-
-/**
- * Navy ASR implementation (OpenAI-compatible /audio/transcriptions)
- */
-async function transcribeNavyASR(
-  config: ASRModelConfig,
-  audioBuffer: Buffer | Blob,
-): Promise<ASRTranscriptionResult> {
-  const baseUrl = config.baseUrl || ASR_PROVIDERS['navy-asr'].defaultBaseUrl || 'https://api.navy/v1';
-  const audioBlob =
-    audioBuffer instanceof Blob
-      ? audioBuffer
-      : new Blob(
-          [
-            audioBuffer.buffer.slice(
-              audioBuffer.byteOffset,
-              audioBuffer.byteOffset + audioBuffer.byteLength,
-            ) as ArrayBuffer,
-          ],
-          { type: 'audio/webm' },
-        );
-
-  try {
-    const formData = new FormData();
-    formData.set(
-      'file',
-      new File([audioBlob], 'audio.webm', {
-        type: audioBlob.type || 'audio/webm',
-      }),
-    );
-    formData.set('model', config.modelId || 'gpt-4o-mini-transcribe');
-    formData.set('response_format', 'json');
-
-    if (config.language && config.language !== 'auto') {
-      formData.set('language', config.language);
-    }
-
-    const response = await fetch(`${baseUrl}/audio/transcriptions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => response.statusText);
-      if (errorText.includes('empty') || errorText.includes('too short')) {
-        return { text: '' };
-      }
-      throw new Error(`Navy ASR API error: ${errorText || response.statusText}`);
-    }
-
-    const rawResponse = await response.text();
-    if (!rawResponse.trim()) {
-      return { text: '' };
-    }
-
-    try {
-      return parseNavyASRResponse(JSON.parse(rawResponse));
-    } catch {
-      return parseNavyASRResponse(rawResponse);
-    }
-  } catch (error: unknown) {
-    const errMsg = error instanceof Error ? error.message : '';
-    if (errMsg.includes('empty') || errMsg.includes('too short')) {
-      return { text: '' };
-    }
-    throw error;
-  }
-}
-
-export function parseNavyASRResponse(payload: unknown): ASRTranscriptionResult {
-  if (typeof payload === 'string') {
-    return { text: payload.trim() };
-  }
-
-  if (!payload || typeof payload !== 'object') {
-    throw new Error('Navy ASR error: Invalid transcription response');
-  }
-
-  const data = payload as {
-    text?: unknown;
-    transcript?: unknown;
-    output?: {
-      choices?: Array<{
-        message?: {
-          content?: Array<{
-            text?: unknown;
-          }>;
-        };
-      }>;
-    };
-  };
-
-  if (typeof data.text === 'string') {
-    return { text: data.text };
-  }
-
-  if (typeof data.transcript === 'string') {
-    return { text: data.transcript };
-  }
-
-  const nestedText = data.output?.choices?.[0]?.message?.content?.[0]?.text;
-  if (typeof nestedText === 'string') {
-    return { text: nestedText };
-  }
-
-  throw new Error(
-    `Navy ASR error: No transcription text in response. Response: ${JSON.stringify(payload)}`,
-  );
 }
 
 /**
@@ -458,9 +524,12 @@ export async function getCurrentASRConfig(): Promise<ASRModelConfig> {
 
   return {
     providerId: asrProviderId,
-    modelId: providerConfig?.modelId || ASR_PROVIDERS[asrProviderId]?.defaultModelId || '',
+    modelId:
+      providerConfig?.modelId ||
+      ASR_PROVIDERS[asrProviderId as keyof typeof ASR_PROVIDERS]?.defaultModelId ||
+      '',
     apiKey: providerConfig?.apiKey,
-    baseUrl: providerConfig?.baseUrl,
+    baseUrl: providerConfig?.baseUrl || providerConfig?.customDefaultBaseUrl,
     language: asrLanguage,
   };
 }

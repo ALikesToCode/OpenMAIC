@@ -1,14 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { generateSceneActions, generateSceneContent } from '@/lib/generation/scene-generator';
 import {
-  generateSceneActions,
-  generateSceneContent,
-} from '@/lib/generation/scene-generator';
-import { normalizeOutlineLanguage, resolveOutlineLanguage } from '@/lib/generation/outline-language';
-import type {
-  GeneratedQuizContent,
-  SceneOutline,
-} from '@/lib/types/generation';
+  normalizeOutlineLanguage,
+  resolveOutlineLanguage,
+} from '@/lib/generation/outline-language';
+import type { GeneratedQuizContent, SceneOutline } from '@/lib/types/generation';
 
 describe('scene language handling', () => {
   it('lets the caller fallback override hallucinated pblConfig language', () => {
@@ -89,8 +86,8 @@ describe('scene language handling', () => {
 
   it('passes english into interactive generation when outline language is missing', async () => {
     const aiCall = vi.fn(async (_systemPrompt: string, userPrompt: string) => {
-      if (userPrompt.includes('**Page language**:')) {
-        expect(userPrompt).toContain('**Page language**: en-US');
+      if (userPrompt.includes('## Language')) {
+        expect(userPrompt).toContain('Teach this scene in English.');
         return '<!DOCTYPE html><html><body>Interactive demo</body></html>';
       }
       return '{"core_formulas":[],"mechanism":[],"constraints":[],"forbidden_errors":[]}';

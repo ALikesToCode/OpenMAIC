@@ -1,10 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { ASR_PROVIDERS } from '@/lib/audio/constants';
-import {
-  getAudioRecordingErrorMessage,
-  getAudioRecordingExtension,
-  getPreferredAudioRecorderMimeType,
-} from '@/lib/audio/media-recorder-format';
+import { normalizeASRUploadAudio } from '@/lib/audio/wav-utils';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('AudioRecorder');
@@ -41,24 +37,25 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
 
   // Send audio to server for transcription
   const transcribeAudio = useCallback(
-    async (audioBlob: Blob, fileName = 'recording.webm') => {
+    async (audioBlob: Blob) => {
       setIsProcessing(true);
 
       try {
         const formData = new FormData();
-        formData.append('audio', audioBlob, fileName);
 
         // Get current ASR configuration from settings store
         // Note: This requires importing useSettingsStore in browser context
         if (typeof window !== 'undefined') {
           const { useSettingsStore } = await import('@/lib/store/settings');
           const { asrProviderId, asrLanguage, asrProvidersConfig } = useSettingsStore.getState();
+          const uploadAudio = await normalizeASRUploadAudio(asrProviderId, audioBlob);
+          formData.append('audio', uploadAudio.blob, uploadAudio.fileName);
 
           formData.append('providerId', asrProviderId);
           formData.append(
             'modelId',
             asrProvidersConfig?.[asrProviderId]?.modelId ||
-              ASR_PROVIDERS[asrProviderId]?.defaultModelId ||
+              ASR_PROVIDERS[asrProviderId as keyof typeof ASR_PROVIDERS]?.defaultModelId ||
               '',
           );
           formData.append('language', asrLanguage);
@@ -68,9 +65,13 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
           if (providerConfig?.apiKey?.trim()) {
             formData.append('apiKey', providerConfig.apiKey);
           }
-          if (providerConfig?.baseUrl?.trim()) {
-            formData.append('baseUrl', providerConfig.baseUrl);
+          const effectiveBaseUrl =
+            providerConfig?.baseUrl?.trim() || providerConfig?.customDefaultBaseUrl || '';
+          if (effectiveBaseUrl) {
+            formData.append('baseUrl', effectiveBaseUrl);
           }
+        } else {
+          formData.append('audio', audioBlob, 'recording.webm');
         }
 
         const response = await fetch('/api/transcription', {
@@ -203,12 +204,9 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       // Create MediaRecorder
-      const preferredMimeType = getPreferredAudioRecorderMimeType(MediaRecorder);
-      const mediaRecorder = preferredMimeType
-        ? new MediaRecorder(stream, { mimeType: preferredMimeType })
-        : new MediaRecorder(stream);
-      const resolvedMimeType = mediaRecorder.mimeType || preferredMimeType || 'audio/webm';
-      const fileName = `recording.${getAudioRecordingExtension(resolvedMimeType)}`;
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm',
+      });
 
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -225,12 +223,11 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
 
         // Merge audio chunks
         const audioBlob = new Blob(audioChunksRef.current, {
-          type: resolvedMimeType,
+          type: 'audio/webm',
         });
 
         // Send to server for transcription
-        // Reuse the existing transcription path with the recorder-selected blob type.
-        await transcribeAudio(audioBlob, fileName);
+        await transcribeAudio(audioBlob);
         busyRef.current = false;
       };
 
@@ -246,7 +243,7 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
     } catch (error) {
       busyRef.current = false;
       log.error('Failed to start recording:', error);
-      onError?.(getAudioRecordingErrorMessage(error));
+      onError?.('无法访问麦克风，请检查权限设置');
     }
   }, [onTranscription, onError, transcribeAudio]);
 

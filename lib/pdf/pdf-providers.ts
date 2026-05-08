@@ -141,6 +141,7 @@ import type { PDFParserConfig } from './types';
 import type { ParsedPdfContent } from '@/lib/types/pdf';
 import { PDF_PROVIDERS } from './constants';
 import { parseWithMinerUClient } from './mineru-client';
+import { parseWithMinerUCloud } from './mineru-cloud';
 
 interface ParsePDFOptions {
   includeImages?: boolean;
@@ -185,6 +186,10 @@ export async function parsePDF(
 
     case 'mineru':
       result = await parseWithMinerU(config, pdfBuffer);
+      break;
+
+    case 'mineru-cloud':
+      result = await parseWithMinerUCloud(config, pdfBuffer);
       break;
 
     default:

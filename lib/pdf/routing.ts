@@ -1,7 +1,7 @@
 import type { PDFProviderId } from './types';
 import type { ParsedPdfContent } from '@/lib/types/pdf';
 
-export type PDFProcessingMode = 'unpdf' | 'mineru';
+export type PDFProcessingMode = 'unpdf' | 'mineru' | 'mineru-cloud';
 
 export interface PDFRoutingInput {
   requestedProviderId: PDFProviderId;
@@ -20,7 +20,11 @@ export function resolvePDFProcessingMode({
   fileSizeBytes,
   pageCount,
 }: PDFRoutingInput): PDFProcessingMode {
-  if (requestedProviderId === 'unpdf' || requestedProviderId === 'mineru') {
+  if (
+    requestedProviderId === 'unpdf' ||
+    requestedProviderId === 'mineru' ||
+    requestedProviderId === 'mineru-cloud'
+  ) {
     return requestedProviderId;
   }
 

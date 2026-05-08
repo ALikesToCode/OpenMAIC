@@ -11,10 +11,10 @@ import { createLogger } from '@/lib/logger';
 import { CLASSROOMS_DIR } from '@/lib/server/classroom-storage';
 import { generateImage } from '@/lib/media/image-providers';
 import { generateVideo, normalizeVideoOptions } from '@/lib/media/video-providers';
-import { VIDEO_PROVIDERS } from '@/lib/media/video-provider-registry';
 import { generateTTS } from '@/lib/audio/tts-providers';
 import { DEFAULT_TTS_VOICES, DEFAULT_TTS_MODELS, TTS_PROVIDERS } from '@/lib/audio/constants';
 import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
+import { VIDEO_PROVIDERS } from '@/lib/media/video-provider-registry';
 import { isMediaPlaceholder } from '@/lib/store/media-generation';
 import {
   getServerImageProviders,
@@ -34,6 +34,7 @@ import type { ImageProviderId } from '@/lib/media/types';
 import type { VideoProviderId } from '@/lib/media/types';
 import type { TTSProviderId } from '@/lib/audio/types';
 import { splitLongSpeechActions } from '@/lib/audio/tts-utils';
+import { VOXCPM_AUTO_VOICE_ID, VOXCPM_TTS_PROVIDER_ID } from '@/lib/audio/voxcpm';
 
 const log = createLogger('ClassroomMedia');
 
@@ -94,11 +95,11 @@ export async function generateMediaForClassroom(
       try {
         const providerId = imageProviderIds[0] as ImageProviderId;
         const apiKey = resolveImageApiKey(providerId);
-        if (!apiKey) {
+        const providerConfig = IMAGE_PROVIDERS[providerId];
+        if (providerConfig?.requiresApiKey && !apiKey) {
           log.warn(`No API key for image provider "${providerId}", skipping ${req.elementId}`);
           continue;
         }
-        const providerConfig = IMAGE_PROVIDERS[providerId];
         const model = providerConfig?.models?.[0]?.id;
 
         const result = await generateImage(
@@ -220,12 +221,19 @@ export async function generateTTSForClassroom(
 
   const providerId = ttsProviderIds[0] as TTSProviderId;
   const apiKey = resolveTTSApiKey(providerId);
-  if (!apiKey) {
+  const ttsProvider = TTS_PROVIDERS[providerId as keyof typeof TTS_PROVIDERS];
+  if (ttsProvider?.requiresApiKey && !apiKey) {
     log.warn(`No API key for TTS provider "${providerId}", skipping TTS generation`);
     return;
   }
-  const ttsBaseUrl = resolveTTSBaseUrl(providerId) || TTS_PROVIDERS[providerId]?.defaultBaseUrl;
-  const voice = DEFAULT_TTS_VOICES[providerId] || 'default';
+  const ttsBaseUrl = resolveTTSBaseUrl(providerId) || ttsProvider?.defaultBaseUrl;
+  const voice = DEFAULT_TTS_VOICES[providerId as keyof typeof DEFAULT_TTS_VOICES] || 'default';
+  const format = ttsProvider?.supportedFormats?.[0] || 'mp3';
+  if (providerId === VOXCPM_TTS_PROVIDER_ID && voice === VOXCPM_AUTO_VOICE_ID) {
+    log.warn('VoxCPM Auto Voice requires agent context; skipping server-side TTS generation');
+    return;
+  }
+
   for (const scene of scenes) {
     if (!scene.actions) continue;
 
@@ -233,16 +241,20 @@ export async function generateTTSForClassroom(
     // mirroring the client-side approach. Each sub-action gets its own audio file.
     scene.actions = splitLongSpeechActions(scene.actions, providerId);
 
+    // Use scene order to make audio IDs unique across scenes
+    const sceneOrder = scene.order;
+
     for (const action of scene.actions) {
       if (action.type !== 'speech' || !(action as SpeechAction).text) continue;
       const speechAction = action as SpeechAction;
-      const audioId = `tts_${action.id}`;
+      // Include scene order in audioId to prevent collision across scenes
+      const audioId = `tts_s${sceneOrder}_${action.id}`;
 
       try {
         const result = await generateTTS(
           {
             providerId,
-            modelId: DEFAULT_TTS_MODELS[providerId] || '',
+            modelId: DEFAULT_TTS_MODELS[providerId as keyof typeof DEFAULT_TTS_MODELS] || '',
             apiKey,
             baseUrl: ttsBaseUrl,
             voice,
@@ -251,7 +263,7 @@ export async function generateTTSForClassroom(
           speechAction.text,
         );
 
-        const filename = `${audioId}.${result.format}`;
+        const filename = `${audioId}.${result.format || format}`;
         await fs.writeFile(path.join(audioDir, filename), result.audio);
 
         speechAction.audioId = audioId;

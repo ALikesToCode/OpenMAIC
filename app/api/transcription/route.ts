@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     const clientBaseUrl = baseUrl || undefined;
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
-      const ssrfError = validateUrlForSSRF(clientBaseUrl);
+      const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
         return apiError('INVALID_URL', 403, ssrfError);
       }
@@ -53,12 +53,8 @@ export async function POST(req: NextRequest) {
       baseUrl: resolvedBaseUrl,
     };
 
-    // Convert audio file to buffer
-    const arrayBuffer = await audioFile.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
     // Transcribe using the provider system
-    const result = await transcribeAudio(config, buffer);
+    const result = await transcribeAudio(config, audioFile);
 
     return apiSuccess({ text: result.text });
   } catch (error) {

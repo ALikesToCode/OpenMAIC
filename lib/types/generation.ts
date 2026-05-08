@@ -30,22 +30,6 @@ export type ImageMapping = Record<string, string>;
 
 // ==================== Stage 1 Input ====================
 
-export interface AudienceProfile {
-  gradeLevel: string; // "K-12", "University", "Professional"
-  ageRange?: string; // "6-12", "18-25"
-  prerequisites?: string[]; // Required prior knowledge
-  learningStyles?: ('visual' | 'auditory' | 'kinesthetic' | 'reading')[];
-}
-
-export interface StylePreferences {
-  tone: 'formal' | 'casual' | 'engaging' | 'academic';
-  visualStyle: 'minimalist' | 'colorful' | 'professional' | 'playful';
-  interactivityLevel: 'low' | 'medium' | 'high';
-  includeExamples: boolean;
-  includePractice: boolean;
-  language: string; // 'zh-CN', 'en-US'
-}
-
 export interface UploadedDocument {
   id: string;
   name: string; // Original filename
@@ -64,46 +48,36 @@ export interface UploadedDocument {
  */
 export interface UserRequirements {
   requirement: string; // Single free-form text for all user input
-  language: 'zh-CN' | 'en-US'; // Course language - critical for generation
+  language?: 'en-US' | 'zh-CN'; // Optional explicit teaching language hint
   userNickname?: string; // Student nickname for personalization
   userBio?: string; // Student background for personalization
   webSearch?: boolean; // Enable web search for richer context
-  sceneCountTarget?: number; // User-requested full-course scene target
-  sourcePdfPageCount?: number; // Parsed PDF page count to help scene sizing
-}
-
-export interface GenerationContextAgent {
-  id: string;
-  name: string;
-  role: string;
-  persona?: string;
-}
-
-export interface OutlineGenerationContext {
-  requirements: UserRequirements;
-  pdfText?: string;
-  pdfImages?: PdfImage[];
-  researchContext?: string;
-  agents?: GenerationContextAgent[];
-  userProfile?: string;
-}
-
-/**
- * @deprecated Use UserRequirements instead
- * Legacy structured requirements - kept for backward compatibility
- */
-export interface LegacyUserRequirements {
-  topic: string;
-  description?: string;
-  learningObjectives: string[];
-  audience: AudienceProfile;
-  durationMinutes: number;
-  style: StylePreferences;
-  documents?: UploadedDocument[];
-  additionalNotes?: string;
+  interactiveMode?: boolean; // Enable Interactive Mode for interactive-first generation
 }
 
 // ==================== Stage 1 Output: Scene Outlines (Simplified) ====================
+
+/**
+ * Widget outline configuration for interactive scenes
+ * Unified for both normal and ultra modes
+ */
+export interface WidgetOutline {
+  // Common field
+  concept?: string;
+
+  // Type-specific fields
+  keyVariables?: string[]; // simulation
+  diagramType?: 'flowchart' | 'mindmap' | 'hierarchy' | 'system'; // diagram
+  language?: 'python' | 'javascript' | 'typescript' | 'java' | 'cpp'; // code
+  gameType?: 'quiz' | 'puzzle' | 'strategy' | 'card' | 'action'; // game
+  visualizationType?: 'molecular' | 'solar' | 'anatomy' | 'geometry' | 'physics' | 'custom'; // visualization3d
+  objects?: string[]; // visualization3d
+  interactions?: string[]; // visualization3d
+  challenge?: string; // game - description of what player does
+  playerControls?: string[]; // game - what player controls
+  nodeCount?: number; // diagram - approximate node count
+  challengeType?: string; // code - type of coding challenge
+}
 
 /**
  * Simplified scene outline
@@ -117,8 +91,9 @@ export interface SceneOutline {
   keyPoints: string[]; // 3-5 core key points
   teachingObjective?: string;
   estimatedDuration?: number; // seconds
+  language?: 'en-US' | 'zh-CN';
   order: number;
-  language?: 'zh-CN' | 'en-US'; // Generation language (inherited from requirements)
+  languageNote?: string; // LLM-inferred language note for this scene
   // Suggested image IDs (from PDF-extracted images)
   suggestedImageIds?: string[]; // e.g., ["img_1", "img_3"]
   // AI-generated media requests (when PDF images are insufficient)
@@ -129,7 +104,10 @@ export interface SceneOutline {
     difficulty: 'easy' | 'medium' | 'hard';
     questionTypes: ('single' | 'multiple' | 'text')[];
   };
-  // Interactive-specific config
+  /**
+   * @deprecated Use widgetType + widgetOutline instead
+   * Legacy interactive config - kept for backward compatibility only
+   */
   interactiveConfig?: {
     conceptName: string;
     conceptOverview: string;
@@ -142,8 +120,11 @@ export interface SceneOutline {
     projectDescription: string;
     targetSkills: string[];
     issueCount?: number;
-    language: 'zh-CN' | 'en-US';
+    language?: 'en-US' | 'zh-CN';
   };
+  // Widget fields (required for type === 'interactive' in unified mode)
+  widgetType?: WidgetType;
+  widgetOutline?: WidgetOutline;
 }
 
 // ==================== Stage 3 Output: Generated Content ====================
@@ -180,6 +161,8 @@ export interface GeneratedPBLContent {
 
 // ==================== Interactive Generation Types ====================
 
+import type { WidgetConfig, TeacherAction, WidgetType } from './widgets';
+
 /**
  * Scientific model output from scientific modeling stage
  */
@@ -196,6 +179,9 @@ export interface ScientificModel {
 export interface GeneratedInteractiveContent {
   html: string;
   scientificModel?: ScientificModel;
+  widgetType?: WidgetType;
+  widgetConfig?: WidgetConfig;
+  teacherActions?: TeacherAction[];
 }
 
 // ==================== Legacy Types (for compatibility) ====================

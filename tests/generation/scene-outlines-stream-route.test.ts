@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const streamLLMMock = vi.hoisted(() => vi.fn());
 const buildPromptPdfContentMock = vi.hoisted(() => vi.fn());
-const resolveModelFromHeadersMock = vi.hoisted(() =>
+const resolveModelFromRequestMock = vi.hoisted(() =>
   vi.fn().mockReturnValue({
     model: {} as never,
     modelInfo: {
@@ -20,7 +20,7 @@ vi.mock('@/lib/ai/llm', () => ({
 }));
 
 vi.mock('@/lib/server/resolve-model', () => ({
-  resolveModelFromHeaders: resolveModelFromHeadersMock,
+  resolveModelFromRequest: resolveModelFromRequestMock,
 }));
 
 vi.mock('@/lib/generation/pdf-prompt-context', () => ({
@@ -42,8 +42,10 @@ describe('POST /api/generate/scene-outlines-stream', () => {
     vi.resetModules();
     streamLLMMock.mockReset();
     buildPromptPdfContentMock.mockReset();
-    resolveModelFromHeadersMock.mockClear();
-    buildPromptPdfContentMock.mockImplementation(async ({ pdfText }: { pdfText?: string }) => pdfText);
+    resolveModelFromRequestMock.mockClear();
+    buildPromptPdfContentMock.mockImplementation(
+      async ({ pdfText }: { pdfText?: string }) => pdfText,
+    );
   });
 
   it('backfills missing outline language from the requested course language', async () => {
@@ -156,6 +158,7 @@ describe('POST /api/generate/scene-outlines-stream', () => {
         prompt: expect.stringContaining('Selected later weeks context'),
       }),
       'scene-outlines-stream',
+      undefined,
     );
   });
 });

@@ -2,6 +2,9 @@
 import type { Slide } from '@/lib/types/slides';
 import type { Action } from '@/lib/types/action';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
+import type { WidgetType, WidgetConfig, TeacherAction } from '@/lib/types/widgets';
+import type { AgentInfo } from '@/lib/generation/pipeline-types';
+import type { PdfImage, UserRequirements } from '@/lib/types/generation';
 
 export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl';
 
@@ -19,8 +22,17 @@ export interface Stage {
   createdAt: number;
   updatedAt: number;
   // Stage metadata
+  languageDirective?: string;
   language?: string;
   style?: string;
+  generationContext?: {
+    requirements: UserRequirements;
+    pdfText?: string;
+    pdfImages?: PdfImage[];
+    researchContext?: string;
+    agents?: AgentInfo[];
+    userProfile?: string;
+  };
   // Whiteboard data
   whiteboard?: Whiteboard[];
   // Agent IDs selected when this classroom was created
@@ -38,9 +50,14 @@ export interface Stage {
     persona: string;
     avatar: string;
     color: string;
-      priority: number;
+    priority: number;
   }>;
-  generationContext?: import('./generation').OutlineGenerationContext;
+  /**
+   * True when this classroom was generated with Interactive Mode enabled
+   * (the INTERACTIVE_OUTLINES prompt branch).
+   * Absent on legacy classrooms, imports, and regular-mode generations.
+   */
+  interactiveMode?: boolean;
 }
 
 /**
@@ -121,6 +138,10 @@ export interface InteractiveContent {
   url: string; // URL of the interactive page
   // Optional: embedded HTML content
   html?: string;
+  // Ultra Mode widget fields
+  widgetType?: WidgetType;
+  widgetConfig?: WidgetConfig;
+  teacherActions?: TeacherAction[];
 }
 
 /**

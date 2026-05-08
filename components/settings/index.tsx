@@ -26,15 +26,15 @@ import {
   Search,
   Volume2,
   Mic,
+  Plus,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { toast } from 'sonner';
-import { fetchNavyModelsForSurface, toCustomModelEntries } from '@/lib/navy/model-sync';
 import { type ProviderId } from '@/lib/ai/providers';
-import { PROVIDERS } from '@/lib/ai/providers';
+import { PROVIDERS, MONO_LOGO_PROVIDERS } from '@/lib/ai/providers';
 import { cn } from '@/lib/utils';
-import { getProviderTypeLabel } from './utils';
+import { createCustomProviderSettings, getProviderTypeLabel } from './utils';
 import { ProviderList } from './provider-list';
 import { ProviderConfigPanel } from './provider-config-panel';
 import { PDFSettings } from './pdf-settings';
@@ -53,11 +53,13 @@ import { ASRSettings } from './asr-settings';
 import { ASR_PROVIDERS } from '@/lib/audio/constants';
 import type { ASRProviderId } from '@/lib/audio/types';
 import { WebSearchSettings } from './web-search-settings';
-import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
+import { WEB_SEARCH_PROVIDERS, getWebSearchProviderDisplayName } from '@/lib/web-search/constants';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
 import { GeneralSettings } from './general-settings';
 import { ModelEditDialog } from './model-edit-dialog';
 import { AddProviderDialog, type NewProviderData } from './add-provider-dialog';
+import { AddAudioProviderDialog, type NewAudioProviderData } from './add-audio-provider-dialog';
+import { isCustomTTSProvider, isCustomASRProvider } from '@/lib/audio/types';
 import type { SettingsSection, EditingModel } from '@/lib/types/settings';
 
 // ─── Provider List Column (reusable) ───
@@ -68,6 +70,7 @@ function ProviderListColumn<T extends string>({
   onSelect,
   width,
   t,
+  onAdd,
 }: {
   providers: Array<{ id: T; name: string; icon?: string }>;
   configs: Record<string, { isServerConfigured?: boolean }>;
@@ -75,6 +78,7 @@ function ProviderListColumn<T extends string>({
   onSelect: (id: T) => void;
   width: number;
   t: (key: string) => string;
+  onAdd?: () => void;
 }) {
   return (
     <div className="flex-shrink-0 bg-background flex flex-col" style={{ width }}>
@@ -94,7 +98,10 @@ function ProviderListColumn<T extends string>({
               <img
                 src={provider.icon}
                 alt={provider.name}
-                className="w-5 h-5 rounded"
+                className={cn(
+                  'w-5 h-5 rounded',
+                  MONO_LOGO_PROVIDERS.has(provider.id) && 'dark:invert',
+                )}
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}
@@ -111,53 +118,76 @@ function ProviderListColumn<T extends string>({
           </button>
         ))}
       </div>
+      {onAdd && (
+        <div className="p-3 border-t">
+          <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={onAdd}>
+            <Plus className="h-3.5 w-3.5" />
+            {t('settings.addProviderButton')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Helper: get TTS/ASR provider display name ───
 function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => string): string {
-  const names: Record<TTSProviderId, string> = {
+  if (isCustomTTSProvider(providerId)) {
+    const cfg = useSettingsStore.getState().ttsProvidersConfig[providerId];
+    return cfg?.customName || providerId;
+  }
+  const names: Record<string, string> = {
     'openai-tts': t('settings.providerOpenAITTS'),
     'azure-tts': t('settings.providerAzureTTS'),
     'glm-tts': t('settings.providerGLMTTS'),
     'qwen-tts': t('settings.providerQwenTTS'),
+    'voxcpm-tts': t('settings.providerVoxCPMTTS'),
     'doubao-tts': t('settings.providerDoubaoTTS'),
     'elevenlabs-tts': t('settings.providerElevenLabsTTS'),
     'minimax-tts': t('settings.providerMiniMaxTTS'),
     'navy-tts': t('settings.providerNavyTTS'),
+    'lemonade-tts': t('settings.providerLemonadeTTS'),
     'browser-native-tts': t('settings.providerBrowserNativeTTS'),
   };
-  return names[providerId];
+  return names[providerId] || providerId;
 }
 
 function getASRProviderName(providerId: ASRProviderId, t: (key: string) => string): string {
-  const names: Record<ASRProviderId, string> = {
+  if (isCustomASRProvider(providerId)) {
+    const cfg = useSettingsStore.getState().asrProvidersConfig[providerId];
+    return cfg?.customName || providerId;
+  }
+  const names: Record<string, string> = {
     'openai-whisper': t('settings.providerOpenAIWhisper'),
     'browser-native': t('settings.providerBrowserNative'),
     'qwen-asr': t('settings.providerQwenASR'),
     'navy-asr': t('settings.providerNavyASR'),
+    'lemonade-asr': t('settings.providerLemonadeASR'),
   };
-  return names[providerId];
+  return names[providerId] || providerId;
 }
 
 // ─── Image/Video provider name helpers ───
 const IMAGE_PROVIDER_NAMES: Record<ImageProviderId, string> = {
   seedream: 'providerSeedream',
+  'openai-image': 'providerOpenAIImage',
   'qwen-image': 'providerQwenImage',
   'nano-banana': 'providerNanoBanana',
   'minimax-image': 'providerMiniMaxImage',
   'grok-image': 'providerGrokImage',
   'navy-image': 'providerNavyImage',
+  lemonade: 'providerLemonadeImage',
 };
 
 const IMAGE_PROVIDER_ICONS: Record<ImageProviderId, string> = {
   seedream: '/logos/doubao.svg',
+  'openai-image': '/logos/openai.svg',
   'qwen-image': '/logos/bailian.svg',
   'nano-banana': '/logos/gemini.svg',
   'minimax-image': '/logos/minimax.svg',
   'grok-image': '/logos/grok.svg',
   'navy-image': '/logos/navy.svg',
+  lemonade: '/logos/lemonade.svg',
 };
 
 const VIDEO_PROVIDER_NAMES: Record<VideoProviderId, string> = {
@@ -240,6 +270,20 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
 
   // Add provider dialog
   const [showAddProviderDialog, setShowAddProviderDialog] = useState(false);
+  const [showAddTTSProviderDialog, setShowAddTTSProviderDialog] = useState(false);
+  const [showAddASRProviderDialog, setShowAddASRProviderDialog] = useState(false);
+  const addCustomTTSProvider = useSettingsStore((state) => state.addCustomTTSProvider);
+  const addCustomASRProvider = useSettingsStore((state) => state.addCustomASRProvider);
+
+  const handleAddTTSProvider = (data: NewAudioProviderData) => {
+    const id = `custom-tts-${Date.now()}` as TTSProviderId;
+    addCustomTTSProvider(id, data.name, data.baseUrl, data.requiresApiKey, data.defaultModel);
+  };
+
+  const handleAddASRProvider = (data: NewAudioProviderData) => {
+    const id = `custom-asr-${Date.now()}` as ASRProviderId;
+    addCustomASRProvider(id, data.name, data.baseUrl, data.requiresApiKey);
+  };
 
   // Save status indicator
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
@@ -323,63 +367,13 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
     setTimeout(() => setSaveStatus('idle'), 2000);
   };
 
-  const handleSyncNavyProviderModels = async (pid: ProviderId) => {
-    if (pid !== 'navy') return;
-
-    try {
-      const remoteModels = toCustomModelEntries(await fetchNavyModelsForSurface('llm')).map(
-        (model) => ({
-          id: model.id,
-          name: model.name,
-          capabilities: {
-            streaming: true,
-            tools: true,
-            vision: false,
-          },
-        }),
-      );
-
-      if (remoteModels.length === 0) {
-        toast.error(t('settings.noModelsAvailable'));
-        return;
-      }
-
-      const existingModels = providersConfig[pid]?.models || [];
-      const remoteIds = new Set(remoteModels.map((model) => model.id));
-      const mergedModels = [
-        ...remoteModels,
-        ...existingModels.filter((model) => !remoteIds.has(model.id)),
-      ];
-
-      const updatedConfig = {
-        ...providersConfig,
-        [pid]: {
-          ...providersConfig[pid],
-          models: mergedModels,
-        },
-      };
-
-      setProvidersConfig(updatedConfig);
-
-      if (selectedProviderId === pid) {
-        const hasCurrentModel = mergedModels.some((model) => model.id === _modelId);
-        if (!hasCurrentModel) {
-          setModel(pid, mergedModels[0].id);
-        }
-      }
-
-      toast.success(t('settings.modelSyncSuccess'));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('settings.modelSyncFailed'));
-    }
-  };
-
   const selectedProvider = providersConfig[selectedProviderId]
     ? {
         id: selectedProviderId,
         name: providersConfig[selectedProviderId].name,
         type: providersConfig[selectedProviderId].type,
         defaultBaseUrl: providersConfig[selectedProviderId].defaultBaseUrl,
+        alternateBaseUrls: PROVIDERS[selectedProviderId]?.alternateBaseUrls,
         icon: providersConfig[selectedProviderId].icon,
         requiresApiKey: providersConfig[selectedProviderId].requiresApiKey,
         models: providersConfig[selectedProviderId].models,
@@ -476,17 +470,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
     const newProviderId = `custom-${Date.now()}` as ProviderId;
     const updatedConfig = {
       ...providersConfig,
-      [newProviderId]: {
-        apiKey: '',
-        baseUrl: '',
-        models: [],
-        name: providerData.name,
-        type: providerData.type,
-        defaultBaseUrl: providerData.baseUrl || undefined,
-        icon: providerData.icon || undefined,
-        requiresApiKey: providerData.requiresApiKey,
-        isBuiltIn: false,
-      },
+      [newProviderId]: createCustomProviderSettings(providerData),
     };
     setProvidersConfig(updatedConfig);
     setShowAddProviderDialog(false);
@@ -520,7 +504,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
       if (firstRemainingPid && firstModel) {
         setModel(firstRemainingPid, firstModel);
       } else {
-        setModel('openai' as ProviderId, 'gpt-4o-mini');
+        setModel('openai' as ProviderId, 'gpt-5.4-mini');
       }
     }
     setProviderToDelete(null);
@@ -569,7 +553,10 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                 <img
                   src={selectedProvider.icon}
                   alt={selectedProvider.name}
-                  className="w-8 h-8 rounded"
+                  className={cn(
+                    'w-8 h-8 rounded',
+                    MONO_LOGO_PROVIDERS.has(selectedProvider.id) && 'dark:invert',
+                  )}
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';
                   }}
@@ -578,7 +565,12 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                 <Box className="h-8 w-8 text-muted-foreground" />
               )}
               <div>
-                <h2 className="text-lg font-semibold">{selectedProvider.name}</h2>
+                <h2 className="text-lg font-semibold">
+                  {t(`settings.providerNames.${selectedProvider.id}`) !==
+                  `settings.providerNames.${selectedProvider.id}`
+                    ? t(`settings.providerNames.${selectedProvider.id}`)
+                    : selectedProvider.name}
+                </h2>
                 <p className="text-xs text-muted-foreground">
                   {getProviderTypeLabel(selectedProvider.type, t)}
                 </p>
@@ -625,7 +617,9 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
             ) : (
               <Box className="h-8 w-8 text-muted-foreground" />
             )}
-            <h2 className="text-lg font-semibold">{wsProvider.name}</h2>
+            <h2 className="text-lg font-semibold">
+              {getWebSearchProviderDisplayName(wsProvider.id, t)}
+            </h2>
           </>
         );
       }
@@ -676,7 +670,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         );
       }
       case 'tts': {
-        const ttsIcon = TTS_PROVIDERS[ttsProviderId]?.icon;
+        const ttsIcon = TTS_PROVIDERS[ttsProviderId as keyof typeof TTS_PROVIDERS]?.icon;
         return (
           <>
             {ttsIcon ? (
@@ -696,7 +690,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         );
       }
       case 'asr': {
-        const asrIcon = ASR_PROVIDERS[asrProviderId]?.icon;
+        const asrIcon = ASR_PROVIDERS[asrProviderId as keyof typeof ASR_PROVIDERS]?.icon;
         return (
           <>
             {asrIcon ? (
@@ -882,7 +876,10 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           {activeSection === 'web-search' && (
             <>
               <ProviderListColumn
-                providers={Object.values(WEB_SEARCH_PROVIDERS)}
+                providers={Object.values(WEB_SEARCH_PROVIDERS).map((provider) => ({
+                  ...provider,
+                  name: getWebSearchProviderDisplayName(provider.id, t),
+                }))}
                 configs={webSearchProvidersConfig}
                 selectedId={selectedWebSearchProviderId}
                 onSelect={setSelectedWebSearchProviderId}
@@ -947,16 +944,26 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           {activeSection === 'tts' && (
             <>
               <ProviderListColumn
-                providers={Object.values(TTS_PROVIDERS).map((p) => ({
-                  id: p.id,
-                  name: getTTSProviderName(p.id, t),
-                  icon: p.icon,
-                }))}
+                providers={[
+                  ...Object.values(TTS_PROVIDERS).map((p) => ({
+                    id: p.id,
+                    name: getTTSProviderName(p.id, t),
+                    icon: p.icon,
+                  })),
+                  ...Object.entries(ttsProvidersConfig)
+                    .filter(([id]) => isCustomTTSProvider(id))
+                    .map(([id, cfg]) => ({
+                      id: id as TTSProviderId,
+                      name: cfg.customName || id,
+                      icon: undefined,
+                    })),
+                ]}
                 configs={ttsProvidersConfig}
                 selectedId={ttsProviderId}
                 onSelect={setTTSProvider}
                 width={providerListWidth}
                 t={t}
+                onAdd={() => setShowAddTTSProviderDialog(true)}
               />
               <div
                 onMouseDown={(e) => handleResizeStart(e, 'providerList')}
@@ -970,16 +977,26 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           {activeSection === 'asr' && (
             <>
               <ProviderListColumn
-                providers={Object.values(ASR_PROVIDERS).map((p) => ({
-                  id: p.id,
-                  name: getASRProviderName(p.id, t),
-                  icon: p.icon,
-                }))}
+                providers={[
+                  ...Object.values(ASR_PROVIDERS).map((p) => ({
+                    id: p.id,
+                    name: getASRProviderName(p.id, t),
+                    icon: p.icon,
+                  })),
+                  ...Object.entries(asrProvidersConfig)
+                    .filter(([id]) => isCustomASRProvider(id))
+                    .map(([id, cfg]) => ({
+                      id: id as ASRProviderId,
+                      name: cfg.customName || id,
+                      icon: undefined,
+                    })),
+                ]}
                 configs={asrProvidersConfig}
                 selectedId={asrProviderId}
                 onSelect={setASRProvider}
                 width={providerListWidth}
                 t={t}
+                onAdd={() => setShowAddASRProviderDialog(true)}
               />
               <div
                 onMouseDown={(e) => handleResizeStart(e, 'providerList')}
@@ -1033,11 +1050,6 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                   onEditModel={(index) => handleEditModel(selectedProviderId, index)}
                   onDeleteModel={(index) => handleDeleteModel(selectedProviderId, index)}
                   onAddModel={handleAddModel}
-                  onSyncModels={
-                    selectedProviderId === 'navy'
-                      ? () => handleSyncNavyProviderModels(selectedProviderId)
-                      : undefined
-                  }
                   onResetToDefault={() => handleResetProvider(selectedProviderId)}
                   isBuiltIn={providersConfig[selectedProviderId]?.isBuiltIn ?? true}
                 />
@@ -1105,6 +1117,22 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         open={showAddProviderDialog}
         onOpenChange={setShowAddProviderDialog}
         onAdd={handleAddProvider}
+      />
+
+      {/* Add TTS Provider Dialog */}
+      <AddAudioProviderDialog
+        open={showAddTTSProviderDialog}
+        onOpenChange={setShowAddTTSProviderDialog}
+        onAdd={handleAddTTSProvider}
+        type="tts"
+      />
+
+      {/* Add ASR Provider Dialog */}
+      <AddAudioProviderDialog
+        open={showAddASRProviderDialog}
+        onOpenChange={setShowAddASRProviderDialog}
+        onAdd={handleAddASRProvider}
+        type="asr"
       />
 
       {/* Delete Provider Confirmation */}

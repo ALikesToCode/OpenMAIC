@@ -100,7 +100,9 @@ describe('getAvailableProvidersWithVoices', () => {
       'minimax-tts': {},
       'navy-tts': {
         isServerConfigured: true,
-        customModels: [{ id: 'gemini-2.5-flash-preview-tts', name: 'Gemini 2.5 Flash Preview TTS' }],
+        customModels: [
+          { id: 'gemini-2.5-flash-preview-tts', name: 'Gemini 2.5 Flash Preview TTS' },
+        ],
       },
       'browser-native-tts': {},
     });

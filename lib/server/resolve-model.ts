@@ -8,6 +8,7 @@
 import type { NextRequest } from 'next/server';
 import { parseModelString } from '@/lib/ai/providers';
 import { getModel, type ModelWithInfo } from '@/lib/ai/provider-model';
+import type { ThinkingConfig } from '@/lib/types/provider';
 import { resolveProxy } from '@/lib/server/provider-config';
 import { resolveProviderRequestConfig } from '@/lib/server/provider-request-config';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
@@ -15,8 +16,16 @@ import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 export interface ResolvedModel extends ModelWithInfo {
   /** Original model string (e.g. "openai/gpt-4o-mini") */
   modelString: string;
+  /** Resolved provider ID (e.g. "openai", "ollama") */
+  providerId: string;
+  /** Resolved model ID (e.g. "gpt-4o-mini") */
+  modelId: string;
   /** Effective API key after server-side fallback resolution */
   apiKey: string;
+  /** Effective base URL after server/client resolution */
+  baseUrl?: string;
+  /** Optional per-request thinking configuration from the client. */
+  thinkingConfig?: ThinkingConfig;
 }
 
 /**
@@ -24,19 +33,23 @@ export interface ResolvedModel extends ModelWithInfo {
  *
  * Use this when model config comes from the request body.
  */
-export function resolveModel(params: {
+export async function resolveModel(params: {
   modelString?: string;
   apiKey?: string;
   baseUrl?: string;
   providerType?: string;
   requiresApiKey?: boolean;
-}): ResolvedModel {
-  const modelString = params.modelString || process.env.DEFAULT_MODEL || 'gpt-4o-mini';
+  thinkingConfig?: ThinkingConfig;
+}): Promise<ResolvedModel> {
+  const modelString = params.modelString || process.env.DEFAULT_MODEL || 'gpt-5.4-mini';
   const { providerId, modelId } = parseModelString(modelString);
 
+  // SSRF validation applies only to client-supplied base URLs.
+  // Server-configured URLs (e.g. OLLAMA_BASE_URL from env/YAML) flow through
+  // resolveBaseUrl() and bypass this check — they're trusted by the operator.
   const clientBaseUrl = params.baseUrl || undefined;
   if (clientBaseUrl && process.env.NODE_ENV === 'production') {
-    const ssrfError = validateUrlForSSRF(clientBaseUrl);
+    const ssrfError = await validateUrlForSSRF(clientBaseUrl);
     if (ssrfError) {
       throw new Error(ssrfError);
     }
@@ -59,20 +72,63 @@ export function resolveModel(params: {
     requiresApiKey: params.requiresApiKey,
   });
 
-  return { model, modelInfo, modelString, apiKey };
+  return {
+    model,
+    modelInfo,
+    modelString,
+    providerId,
+    modelId,
+    apiKey,
+    baseUrl,
+    thinkingConfig: params.thinkingConfig,
+  };
+}
+
+function getThinkingConfigFromBody(body: unknown): ThinkingConfig | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const record = body as { thinkingConfig?: unknown; thinking?: unknown };
+  const config = record.thinkingConfig ?? record.thinking;
+  return config && typeof config === 'object' ? (config as ThinkingConfig) : undefined;
+}
+
+function getRequiresApiKeyFromBody(body: unknown): boolean | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const value = (body as { requiresApiKey?: unknown }).requiresApiKey;
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 /**
  * Resolve a language model from standard request headers.
  *
- * Reads: x-model, x-api-key, x-base-url, x-provider-type, x-requires-api-key
+ * Reads: x-model, x-api-key, x-base-url, x-provider-type
+ * Note: requiresApiKey is derived server-side from the provider registry,
+ * never from client headers, to prevent auth bypass.
  */
-export function resolveModelFromHeaders(req: NextRequest): ResolvedModel {
+export async function resolveModelFromHeaders(req: NextRequest): Promise<ResolvedModel> {
   return resolveModel({
     modelString: req.headers.get('x-model') || undefined,
     apiKey: req.headers.get('x-api-key') || undefined,
     baseUrl: req.headers.get('x-base-url') || undefined,
     providerType: req.headers.get('x-provider-type') || undefined,
-    requiresApiKey: req.headers.get('x-requires-api-key') === 'true' ? true : undefined,
+  });
+}
+
+/**
+ * Resolve a language model from standard request headers plus body fields.
+ *
+ * Reads model credentials from headers and per-request thinking config from
+ * the JSON body field `thinkingConfig` (or legacy/eval field `thinking`).
+ */
+export async function resolveModelFromRequest(
+  req: NextRequest,
+  body: unknown,
+): Promise<ResolvedModel> {
+  return resolveModel({
+    modelString: req.headers.get('x-model') || undefined,
+    apiKey: req.headers.get('x-api-key') || undefined,
+    baseUrl: req.headers.get('x-base-url') || undefined,
+    providerType: req.headers.get('x-provider-type') || undefined,
+    requiresApiKey: getRequiresApiKeyFromBody(body),
+    thinkingConfig: getThinkingConfigFromBody(body),
   });
 }

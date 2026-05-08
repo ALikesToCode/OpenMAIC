@@ -9,6 +9,13 @@ const resolveProviderRequestConfigMock = vi.hoisted(() =>
 );
 
 vi.mock('@/lib/media/image-providers', () => ({
+  IMAGE_PROVIDERS: {
+    'navy-image': {
+      id: 'navy-image',
+      name: 'Navy Image',
+      requiresApiKey: true,
+    },
+  },
   generateImage: generateImageMock,
   aspectRatioToDimensions: vi.fn().mockReturnValue({ width: 1024, height: 576 }),
 }));

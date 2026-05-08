@@ -8,9 +8,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(currentDir, '.'),
+      'server-only': resolve(currentDir, 'tests/mocks/server-only.ts'),
     },
   },
   test: {
     include: ['tests/**/*.test.ts'],
+    setupFiles: ['tests/setup-env.ts'],
   },
 });

@@ -11,14 +11,18 @@ import { CanvasToolbar } from '@/components/canvas/canvas-toolbar';
 import type { CanvasToolbarProps } from '@/components/canvas/canvas-toolbar';
 import type { Scene, StageMode } from '@/lib/types/stage';
 import { useI18n } from '@/lib/hooks/use-i18n';
+import { ClassroomCompletePageConnected } from '@/components/scene-renderers/classroom-complete';
 
 interface CanvasAreaProps extends CanvasToolbarProps {
   readonly currentScene: Scene | null;
   readonly mode: StageMode;
   readonly hideToolbar?: boolean;
   readonly isPendingScene?: boolean;
+  readonly isCourseComplete?: boolean;
   readonly isGenerationFailed?: boolean;
   readonly onRetryGeneration?: () => void;
+  readonly onGenerateMoreScenes?: (additionalSceneCountTarget?: number) => Promise<void>;
+  readonly isGeneratingMoreScenes?: boolean;
 }
 
 export function CanvasArea({
@@ -43,8 +47,11 @@ export function CanvasArea({
   onStopDiscussion,
   hideToolbar,
   isPendingScene,
+  isCourseComplete,
   isGenerationFailed,
   onRetryGeneration,
+  onGenerateMoreScenes,
+  isGeneratingMoreScenes,
 }: CanvasAreaProps) {
   const { t } = useI18n();
   const showControls = mode === 'playback' && !whiteboardOpen;
@@ -116,9 +123,24 @@ export function CanvasArea({
             </div>
           )}
 
-          {/* Pending Scene Loading Overlay */}
+          {/* Pending Scene Loading / Completion Overlay */}
           <AnimatePresence>
-            {isPendingScene && !currentScene && (
+            {isPendingScene && !currentScene && isCourseComplete && (
+              <motion.div
+                key="course-complete"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+                className="absolute inset-0"
+              >
+                <ClassroomCompletePageConnected
+                  onGenerateMoreScenes={onGenerateMoreScenes}
+                  isGeneratingMoreScenes={isGeneratingMoreScenes}
+                />
+              </motion.div>
+            )}
+            {isPendingScene && !currentScene && !isCourseComplete && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

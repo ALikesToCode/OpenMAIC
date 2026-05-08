@@ -11,17 +11,16 @@ import {
   generateSceneActions,
   generateSceneContent,
 } from '@/lib/generation/scene-generator';
-import { createAdaptiveTaskQueue } from '@/lib/generation/adaptive-task-queue';
 import type { AICallFn } from '@/lib/generation/pipeline-types';
 import type { AgentInfo } from '@/lib/generation/pipeline-types';
-import { formatTeacherPersonaForPrompt } from '@/lib/generation/prompt-formatters';
 import { getDefaultAgents } from '@/lib/orchestration/registry/store';
 import { createLogger } from '@/lib/logger';
-import { parseModelString } from '@/lib/ai/providers';
-import { resolveApiKey, resolveWebSearchApiKey } from '@/lib/server/provider-config';
+import { isProviderKeyRequired } from '@/lib/ai/providers';
+import { resolveClassroomWebSearchConfig } from '@/lib/server/web-search-config';
 import { resolveModel } from '@/lib/server/resolve-model';
 import { buildSearchQuery } from '@/lib/server/search-query-builder';
-import { searchWithTavily, formatSearchResultsAsContext } from '@/lib/web-search/tavily';
+import { formatSearchResultsAsContext, searchWeb } from '@/lib/web-search';
+import type { WebSearchProviderId } from '@/lib/web-search/types';
 import { persistClassroom } from '@/lib/server/classroom-storage';
 import {
   generateMediaForClassroom,
@@ -34,50 +33,12 @@ import { AGENT_COLOR_PALETTE, AGENT_DEFAULT_AVATARS } from '@/lib/constants/agen
 
 const log = createLogger('Classroom');
 
-class SceneGenerationStepError extends Error {
-  public readonly retryable: boolean;
-
-  constructor(message: string, retryable = false) {
-    super(message);
-    this.name = 'SceneGenerationStepError';
-    this.retryable = retryable;
-  }
-}
-
-const CONTENT_PREFETCH_CONCURRENCY = {
-  initialConcurrency: 2,
-  minConcurrency: 1,
-  maxConcurrency: 4,
-  maxRequestsPerMinute: 30,
-  successesToIncrease: 3,
-  retryLimit: 2,
-  baseRetryDelayMs: 1000,
-  maxRetryDelayMs: 8000,
-} as const;
-
-function isRetryableSceneGenerationError(error: unknown): boolean {
-  if (error instanceof SceneGenerationStepError) {
-    return error.retryable;
-  }
-
-  if (error instanceof TypeError) {
-    return true;
-  }
-
-  if (error instanceof Error) {
-    return /(timeout|timed out|network|failed to fetch|rate limit|temporar|overloaded)/i.test(
-      error.message,
-    );
-  }
-
-  return false;
-}
-
 export interface GenerateClassroomInput {
   requirement: string;
   pdfContent?: { text: string; images: string[] };
-  language?: string;
   enableWebSearch?: boolean;
+  webSearchProviderId?: WebSearchProviderId;
+  webSearchApiKey?: string;
   enableImageGeneration?: boolean;
   enableVideoGeneration?: boolean;
   enableTTS?: boolean;
@@ -138,10 +99,6 @@ function createInMemoryStore(stage: Stage): StageStore {
   };
 }
 
-function normalizeLanguage(language?: string): 'zh-CN' | 'en-US' {
-  return language === 'en-US' ? 'en-US' : 'zh-CN';
-}
-
 function stripCodeFences(text: string): string {
   let cleaned = text.trim();
   if (cleaned.startsWith('```')) {
@@ -152,7 +109,7 @@ function stripCodeFences(text: string): string {
 
 async function generateAgentProfiles(
   requirement: string,
-  language: string,
+  languageDirective: string,
   aiCall: AICallFn,
 ): Promise<AgentInfo[]> {
   const systemPrompt =
@@ -165,7 +122,8 @@ Requirements:
 - Decide the appropriate number of agents based on the course content (typically 3-5)
 - Exactly 1 agent must have role "teacher", the rest can be "assistant" or "student"
 - Each agent needs: name, role, persona (2-3 sentences describing personality and teaching/learning style)
-- Names and personas must be in language: ${language}
+- Language directive for this course: ${languageDirective}
+  Agent names and personas must follow this language directive.
 
 Return a JSON object with this exact structure:
 {
@@ -217,13 +175,18 @@ export async function generateClassroom(
     scenesGenerated: 0,
   });
 
-  const { model: languageModel, modelInfo, modelString } = resolveModel({});
+  const {
+    model: languageModel,
+    modelInfo,
+    modelString,
+    providerId,
+    apiKey,
+    thinkingConfig,
+  } = await resolveModel({});
   log.info(`Using server-configured model: ${modelString}`);
 
   // Fail fast if the resolved provider has no API key configured
-  const { providerId } = parseModelString(modelString);
-  const apiKey = resolveApiKey(providerId);
-  if (!apiKey) {
+  if (isProviderKeyRequired(providerId) && !apiKey) {
     throw new Error(
       `No API key configured for provider "${providerId}". ` +
         `Set the appropriate key in .env.local or server-providers.yml (e.g. ${providerId.toUpperCase()}_API_KEY).`,
@@ -260,29 +223,10 @@ export async function generateClassroom(
     return result.text;
   };
 
-  const lang = normalizeLanguage(input.language);
   const requirements: UserRequirements = {
     requirement,
-    language: lang,
   };
-  let pdfText = pdfContent?.text || undefined;
-
-  // Resolve agents based on agentMode
-  let agents: AgentInfo[];
-  const agentMode = input.agentMode || 'default';
-  if (agentMode === 'generate') {
-    log.info('Generating custom agent profiles via LLM...');
-    try {
-      agents = await generateAgentProfiles(requirement, lang, aiCall);
-      log.info(`Generated ${agents.length} agent profiles`);
-    } catch (e) {
-      log.warn('Agent profile generation failed, falling back to defaults:', e);
-      agents = getDefaultAgents();
-    }
-  } else {
-    agents = getDefaultAgents();
-  }
-  const teacherContext = formatTeacherPersonaForPrompt(agents);
+  const pdfText = pdfContent?.text || undefined;
 
   await options.onProgress?.({
     step: 'researching',
@@ -294,8 +238,8 @@ export async function generateClassroom(
   // Web search (optional, graceful degradation)
   let researchContext: string | undefined;
   if (input.enableWebSearch) {
-    const tavilyKey = resolveWebSearchApiKey();
-    if (tavilyKey) {
+    const webSearchConfig = resolveClassroomWebSearchConfig(input);
+    if (webSearchConfig) {
       try {
         const searchQuery = await buildSearchQuery(requirement, pdfText, searchQueryAiCall);
 
@@ -306,9 +250,11 @@ export async function generateClassroom(
           finalQueryLength: searchQuery.finalQueryLength,
         });
 
-        const searchResult = await searchWithTavily({
+        const searchResult = await searchWeb({
+          providerId: webSearchConfig.providerId,
           query: searchQuery.query,
-          apiKey: tavilyKey,
+          apiKey: webSearchConfig.apiKey,
+          baseUrl: webSearchConfig.baseUrl,
         });
         researchContext = formatSearchResultsAsContext(searchResult);
         if (researchContext) {
@@ -318,7 +264,7 @@ export async function generateClassroom(
         log.warn('Web search failed, continuing without search context:', e);
       }
     } else {
-      log.warn('enableWebSearch is true but no Tavily API key configured, skipping web search');
+      log.warn('enableWebSearch is true but no web search API key configured, skipping web search');
     }
   }
 
@@ -339,7 +285,7 @@ export async function generateClassroom(
       imageGenerationEnabled: input.enableImageGeneration,
       videoGenerationEnabled: input.enableVideoGeneration,
       researchContext,
-      teacherContext,
+      // NO teacherContext — agents haven't been generated yet
     },
   );
 
@@ -348,8 +294,8 @@ export async function generateClassroom(
     throw new Error(outlinesResult.error || 'Failed to generate scene outlines');
   }
 
-  const outlines = outlinesResult.data;
-  log.info(`Generated ${outlines.length} scene outlines`);
+  const { languageDirective, outlines } = outlinesResult.data;
+  log.info(`Generated ${outlines.length} scene outlines (languageDirective: ${languageDirective})`);
 
   await options.onProgress?.({
     step: 'generating_outlines',
@@ -359,32 +305,49 @@ export async function generateClassroom(
     totalScenes: outlines.length,
   });
 
+  // Resolve agents based on agentMode — now AFTER outlines so we can use languageDirective
+  let agents: AgentInfo[];
+  const agentMode = input.agentMode || 'default';
+  if (agentMode === 'generate') {
+    log.info('Generating custom agent profiles via LLM...');
+    try {
+      agents = await generateAgentProfiles(requirement, languageDirective, aiCall);
+      log.info(`Generated ${agents.length} agent profiles`);
+    } catch (e) {
+      log.warn('Agent profile generation failed, falling back to defaults:', e);
+      agents = getDefaultAgents();
+    }
+  } else {
+    agents = getDefaultAgents();
+  }
+
   const stageId = nanoid(10);
   const stage: Stage = {
     id: stageId,
     name: outlines[0]?.title || requirement.slice(0, 50),
     description: undefined,
-    language: lang,
+    languageDirective,
     style: 'interactive',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    // Embed agent configs so API-generated classrooms can hydrate
-    // the client-side agent registry without IndexedDB
-    generatedAgentConfigs: agents.map((a, i) => ({
-      id: a.id,
-      name: a.name,
-      role: a.role,
-      persona: a.persona || '',
-      avatar: AGENT_DEFAULT_AVATARS[i % AGENT_DEFAULT_AVATARS.length],
-      color: AGENT_COLOR_PALETTE[i % AGENT_COLOR_PALETTE.length],
-      priority: a.role === 'teacher' ? 10 : a.role === 'assistant' ? 7 : 5,
-    })),
-    generationContext: {
-      requirements,
-      pdfText,
-      researchContext,
-      agents,
-    },
+    // For LLM-generated agents, embed full configs so the client can
+    // hydrate the agent registry without prior IndexedDB data.
+    // For default agents, just record IDs — the client already has them.
+    ...(agentMode === 'generate'
+      ? {
+          generatedAgentConfigs: agents.map((a, i) => ({
+            id: a.id,
+            name: a.name,
+            role: a.role,
+            persona: a.persona || '',
+            avatar: AGENT_DEFAULT_AVATARS[i % AGENT_DEFAULT_AVATARS.length],
+            color: AGENT_COLOR_PALETTE[i % AGENT_COLOR_PALETTE.length],
+            priority: a.role === 'teacher' ? 10 : a.role === 'assistant' ? 7 : 5,
+          })),
+        }
+      : {
+          agentIds: agents.map((a) => a.id),
+        }),
   };
 
   const store = createInMemoryStore(stage);
@@ -393,53 +356,9 @@ export async function generateClassroom(
   log.info('Stage 2: Generating scene content and actions...');
   let generatedScenes = 0;
 
-  const contentTasks = createAdaptiveTaskQueue(
-    outlines.map((outline) => async () => {
-      const safeOutline = applyOutlineFallbacks(outline, true);
-      const content = await generateSceneContent(
-        safeOutline,
-        aiCall,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        agents,
-      );
-
-      if (!content) {
-        throw new SceneGenerationStepError(
-          `Failed to generate content: ${safeOutline.title}`,
-          false,
-        );
-      }
-
-      return { safeOutline, content };
-    }),
-    {
-      ...CONTENT_PREFETCH_CONCURRENCY,
-      shouldRetry: isRetryableSceneGenerationError,
-      onConcurrencyChange: (concurrency) => {
-        log.info('Adjusted server scene content prefetch concurrency', { concurrency });
-      },
-    },
-  );
-
-  for (const [index] of outlines.entries()) {
+  for (const [index, outline] of outlines.entries()) {
+    const safeOutline = applyOutlineFallbacks(outline, true);
     const progressStart = 30 + Math.floor((index / Math.max(outlines.length, 1)) * 60);
-    const contentTaskResult = await contentTasks[index];
-
-    if (!contentTaskResult.success) {
-      log.warn(`Skipping scene at index ${index + 1} — content generation failed`, {
-        error:
-          contentTaskResult.error instanceof Error
-            ? contentTaskResult.error.message
-            : String(contentTaskResult.error),
-      });
-      continue;
-    }
-
-    const { safeOutline, content } = contentTaskResult.value;
 
     await options.onProgress?.({
       step: 'generating_scenes',
@@ -449,7 +368,21 @@ export async function generateClassroom(
       totalScenes: outlines.length,
     });
 
-    const actions = await generateSceneActions(safeOutline, content, aiCall, undefined, agents);
+    const content = await generateSceneContent(safeOutline, aiCall, {
+      agents,
+      languageDirective,
+      languageModel,
+      thinkingConfig,
+    });
+    if (!content) {
+      log.warn(`Skipping scene "${safeOutline.title}" — content generation failed`);
+      continue;
+    }
+
+    const actions = await generateSceneActions(safeOutline, content, aiCall, {
+      agents,
+      languageDirective,
+    });
     log.info(`Scene "${safeOutline.title}": ${actions.length} actions`);
 
     const sceneId = createSceneWithActions(safeOutline, content, actions, api);

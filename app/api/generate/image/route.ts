@@ -16,7 +16,11 @@
  */
 
 import { NextRequest } from 'next/server';
-import { generateImage, aspectRatioToDimensions } from '@/lib/media/image-providers';
+import {
+  generateImage,
+  aspectRatioToDimensions,
+  IMAGE_PROVIDERS,
+} from '@/lib/media/image-providers';
 import type { ImageProviderId, ImageGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
     const clientModel = request.headers.get('x-image-model') || undefined;
 
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
-      const ssrfError = validateUrlForSSRF(clientBaseUrl);
+      const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
         return apiError('INVALID_URL', 403, ssrfError);
       }
@@ -53,7 +57,8 @@ export async function POST(request: NextRequest) {
       clientApiKey,
       clientBaseUrl,
     });
-    if (!apiKey) {
+    const provider = IMAGE_PROVIDERS[providerId];
+    if (provider?.requiresApiKey && !apiKey) {
       return apiError(
         'MISSING_API_KEY',
         401,

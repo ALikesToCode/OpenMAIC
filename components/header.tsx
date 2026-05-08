@@ -1,23 +1,13 @@
 'use client';
 
-import {
-  Settings,
-  Sun,
-  Moon,
-  Monitor,
-  ArrowLeft,
-  Loader2,
-  Download,
-} from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { Settings, Sun, Moon, Monitor, ArrowLeft } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useTheme } from '@/lib/hooks/use-theme';
 import { LanguageSwitcher } from './language-switcher';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
-import { useStageStore } from '@/lib/store/stage';
-import { useMediaGenerationStore } from '@/lib/store/media-generation';
 
 const SettingsDialog = dynamic(() => import('./settings').then((mod) => mod.SettingsDialog), {
   ssr: false,
@@ -37,20 +27,6 @@ export function Header({ currentSceneTitle }: HeaderProps) {
   const router = useRouter();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const exportRef = useRef<HTMLDivElement>(null);
-  const scenes = useStageStore((s) => s.scenes);
-  const generatingOutlines = useStageStore((s) => s.generatingOutlines);
-  const failedOutlines = useStageStore((s) => s.failedOutlines);
-  const mediaTasks = useMediaGenerationStore((s) => s.tasks);
-
-  const canExport =
-    scenes.length > 0 &&
-    generatingOutlines.length === 0 &&
-    failedOutlines.length === 0 &&
-    Object.values(mediaTasks).every((task) => task.status === 'done' || task.status === 'failed');
-
   const themeRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -59,19 +35,16 @@ export function Header({ currentSceneTitle }: HeaderProps) {
       if (themeOpen && themeRef.current && !themeRef.current.contains(e.target as Node)) {
         setThemeOpen(false);
       }
-      if (exportMenuOpen && exportRef.current && !exportRef.current.contains(e.target as Node)) {
-        setExportMenuOpen(false);
-      }
     },
-    [themeOpen, exportMenuOpen],
+    [themeOpen],
   );
 
   useEffect(() => {
-    if (themeOpen || exportMenuOpen) {
+    if (themeOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [themeOpen, exportMenuOpen, handleClickOutside]);
+  }, [themeOpen, handleClickOutside]);
 
   return (
     <>
@@ -176,42 +149,9 @@ export function Header({ currentSceneTitle }: HeaderProps) {
           </div>
         </div>
 
-        {/* Export Dropdown */}
-        <div className="relative" ref={exportRef}>
-          <button
-            onClick={() => {
-              if (canExport && !isExporting) setExportMenuOpen(!exportMenuOpen);
-            }}
-            disabled={!canExport || isExporting}
-            title={
-              canExport
-                ? isExporting
-                  ? t('export.exporting')
-                  : t('export.pptx')
-                : t('share.notReady')
-            }
-            className={cn(
-              'shrink-0 p-2 rounded-full transition-all',
-              canExport && !isExporting
-                ? 'text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm'
-                : 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50',
-            )}
-          >
-            {isExporting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Download className="w-4 h-4" />
-            )}
-          </button>
-          {exportMenuOpen && (
-            <HeaderExportMenu
-              onClose={() => setExportMenuOpen(false)}
-              onExportStateChange={setIsExporting}
-            />
-          )}
-        </div>
+        <HeaderExportMenu />
       </header>
-      {settingsOpen ? <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} /> : null}
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   );
 }

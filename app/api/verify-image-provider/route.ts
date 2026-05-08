@@ -15,7 +15,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { testImageConnectivity } from '@/lib/media/image-providers';
+import { IMAGE_PROVIDERS, testImageConnectivity } from '@/lib/media/image-providers';
 import type { ImageProviderId } from '@/lib/media/types';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const clientBaseUrl = request.headers.get('x-base-url') || undefined;
 
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
-      const ssrfError = validateUrlForSSRF(clientBaseUrl);
+      const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
         return apiError('INVALID_URL', 403, ssrfError);
       }
@@ -45,7 +45,8 @@ export async function POST(request: NextRequest) {
       clientBaseUrl,
     });
 
-    if (!apiKey) {
+    const provider = IMAGE_PROVIDERS[providerId];
+    if (provider?.requiresApiKey && !apiKey) {
       return apiError('MISSING_API_KEY', 400, 'No API key configured');
     }
 

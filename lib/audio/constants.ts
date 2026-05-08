@@ -28,12 +28,40 @@
  */
 
 import type {
+  BuiltInTTSProviderId,
   TTSProviderId,
   TTSProviderConfig,
   TTSVoiceInfo,
+  BuiltInASRProviderId,
   ASRProviderId,
   ASRProviderConfig,
 } from './types';
+import {
+  VOXCPM_AUTO_VOICE,
+  VOXCPM_AUTO_VOICE_ID,
+  VOXCPM_TTS_PROVIDER_ID,
+  VOXCPM_VLLM_MODEL_ID,
+} from './voxcpm';
+
+/**
+ * Default supported languages for custom OpenAI-compatible ASR providers.
+ * A practical subset of commonly used languages + auto-detect.
+ */
+export const CUSTOM_ASR_DEFAULT_LANGUAGES = [
+  'auto',
+  'zh',
+  'en',
+  'ja',
+  'ko',
+  'es',
+  'fr',
+  'de',
+  'ru',
+  'ar',
+  'pt',
+  'it',
+  'hi',
+];
 
 /**
  * TTS Provider Registry
@@ -50,7 +78,7 @@ export const MINIMAX_TTS_MODELS = [
   { id: 'speech-02-turbo', name: 'Speech 02 Turbo' },
 ] as const;
 
-export const TTS_PROVIDERS: Record<TTSProviderId, TTSProviderConfig> = {
+export const TTS_PROVIDERS: Record<BuiltInTTSProviderId, TTSProviderConfig> = {
   'openai-tts': {
     id: 'openai-tts',
     name: 'OpenAI TTS',
@@ -268,7 +296,7 @@ export const TTS_PROVIDERS: Record<TTSProviderId, TTSProviderConfig> = {
         description: 'glmVoiceLuodo',
       },
     ],
-    supportedFormats: ['wav'],
+    supportedFormats: ['mp3', 'wav'],
     speedRange: { min: 0.5, max: 2.0, default: 1.0 },
   },
 
@@ -715,6 +743,23 @@ export const TTS_PROVIDERS: Record<TTSProviderId, TTSProviderConfig> = {
     },
   },
 
+  'voxcpm-tts': {
+    id: VOXCPM_TTS_PROVIDER_ID,
+    name: 'VoxCPM2',
+    requiresApiKey: false,
+    defaultBaseUrl: 'http://127.0.0.1:8000',
+    icon: '/logos/voxcpm-icon.png',
+    models: [{ id: VOXCPM_VLLM_MODEL_ID, name: 'VoxCPM2' }],
+    defaultModelId: VOXCPM_VLLM_MODEL_ID,
+    voices: [VOXCPM_AUTO_VOICE],
+    supportedFormats: ['mp3', 'wav'],
+    speedRange: {
+      min: 0.5,
+      max: 2.0,
+      default: 1.0,
+    },
+  },
+
   'doubao-tts': {
     id: 'doubao-tts',
     name: '豆包 TTS 2.0（火山引擎）',
@@ -896,184 +941,29 @@ export const TTS_PROVIDERS: Record<TTSProviderId, TTSProviderConfig> = {
     ],
     defaultModelId: 'gpt-4o-mini-tts',
     voices: [
-      {
-        id: 'alloy',
-        name: 'Alloy',
-        language: 'en',
-        gender: 'neutral',
-        description: 'voiceAlloy',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'ash',
-        name: 'Ash',
-        language: 'en',
-        gender: 'neutral',
-        description: 'voiceAsh',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'ballad',
-        name: 'Ballad',
-        language: 'en',
-        gender: 'neutral',
-        description: 'voiceBallad',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'coral',
-        name: 'Coral',
-        language: 'en',
-        gender: 'neutral',
-        description: 'voiceCoral',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'echo',
-        name: 'Echo',
-        language: 'en',
-        gender: 'male',
-        description: 'voiceEcho',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'fable',
-        name: 'Fable',
-        language: 'en',
-        gender: 'neutral',
-        description: 'voiceFable',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'nova',
-        name: 'Nova',
-        language: 'en',
-        gender: 'female',
-        description: 'voiceNova',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'onyx',
-        name: 'Onyx',
-        language: 'en',
-        gender: 'male',
-        description: 'voiceOnyx',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'sage',
-        name: 'Sage',
-        language: 'en',
-        gender: 'neutral',
-        description: 'voiceSage',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'shimmer',
-        name: 'Shimmer',
-        language: 'en',
-        gender: 'female',
-        description: 'voiceShimmer',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'verse',
-        name: 'Verse',
-        language: 'en',
-        gender: 'neutral',
-        description: 'voiceVerse',
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'marin',
-        name: 'Marin',
-        language: 'en',
-        gender: 'neutral',
-        description: 'voiceMarin',
-        compatibleModels: ['gpt-4o-mini-tts'],
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'cedar',
-        name: 'Cedar',
-        language: 'en',
-        gender: 'neutral',
-        description: 'voiceCedar',
-        compatibleModels: ['gpt-4o-mini-tts'],
-        compatibleModelFamilies: ['openai'],
-      },
-      {
-        id: 'Puck',
-        name: 'Puck',
-        language: 'en',
-        gender: 'neutral',
-        compatibleModelFamilies: ['gemini'],
-      },
-      {
-        id: 'Charon',
-        name: 'Charon',
-        language: 'en',
-        gender: 'neutral',
-        compatibleModelFamilies: ['gemini'],
-      },
-      {
-        id: 'Kore',
-        name: 'Kore',
-        language: 'en',
-        gender: 'neutral',
-        compatibleModelFamilies: ['gemini'],
-      },
-      {
-        id: 'Fenrir',
-        name: 'Fenrir',
-        language: 'en',
-        gender: 'neutral',
-        compatibleModelFamilies: ['gemini'],
-      },
-      {
-        id: 'Aoede',
-        name: 'Aoede',
-        language: 'en',
-        gender: 'neutral',
-        compatibleModelFamilies: ['gemini'],
-      },
-      {
-        id: 'alice',
-        name: 'alice',
-        language: 'en',
-        gender: 'female',
-        compatibleModelFamilies: ['elevenlabs'],
-      },
-      {
-        id: 'aria',
-        name: 'aria',
-        language: 'en',
-        gender: 'female',
-        compatibleModelFamilies: ['elevenlabs'],
-      },
-      {
-        id: 'brian',
-        name: 'brian',
-        language: 'en',
-        gender: 'male',
-        compatibleModelFamilies: ['elevenlabs'],
-      },
-      {
-        id: 'charlie',
-        name: 'charlie',
-        language: 'en',
-        gender: 'male',
-        compatibleModelFamilies: ['elevenlabs'],
-      },
-      {
-        id: 'jessica',
-        name: 'jessica',
-        language: 'en',
-        gender: 'female',
-        compatibleModelFamilies: ['elevenlabs'],
-      },
+      { id: 'alloy', name: 'Alloy', language: 'en', gender: 'neutral', compatibleModelFamilies: ['openai'] },
+      { id: 'ash', name: 'Ash', language: 'en', gender: 'neutral', compatibleModelFamilies: ['openai'] },
+      { id: 'ballad', name: 'Ballad', language: 'en', gender: 'neutral', compatibleModelFamilies: ['openai'] },
+      { id: 'coral', name: 'Coral', language: 'en', gender: 'neutral', compatibleModelFamilies: ['openai'] },
+      { id: 'echo', name: 'Echo', language: 'en', gender: 'male', compatibleModelFamilies: ['openai'] },
+      { id: 'fable', name: 'Fable', language: 'en', gender: 'neutral', compatibleModelFamilies: ['openai'] },
+      { id: 'nova', name: 'Nova', language: 'en', gender: 'female', compatibleModelFamilies: ['openai'] },
+      { id: 'onyx', name: 'Onyx', language: 'en', gender: 'male', compatibleModelFamilies: ['openai'] },
+      { id: 'sage', name: 'Sage', language: 'en', gender: 'neutral', compatibleModelFamilies: ['openai'] },
+      { id: 'shimmer', name: 'Shimmer', language: 'en', gender: 'female', compatibleModelFamilies: ['openai'] },
+      { id: 'verse', name: 'Verse', language: 'en', gender: 'neutral', compatibleModelFamilies: ['openai'] },
+      { id: 'marin', name: 'Marin', language: 'en', gender: 'neutral', compatibleModels: ['gpt-4o-mini-tts'], compatibleModelFamilies: ['openai'] },
+      { id: 'cedar', name: 'Cedar', language: 'en', gender: 'neutral', compatibleModels: ['gpt-4o-mini-tts'], compatibleModelFamilies: ['openai'] },
+      { id: 'Puck', name: 'Puck', language: 'en', gender: 'neutral', compatibleModelFamilies: ['gemini'] },
+      { id: 'Charon', name: 'Charon', language: 'en', gender: 'neutral', compatibleModelFamilies: ['gemini'] },
+      { id: 'Kore', name: 'Kore', language: 'en', gender: 'neutral', compatibleModelFamilies: ['gemini'] },
+      { id: 'Fenrir', name: 'Fenrir', language: 'en', gender: 'neutral', compatibleModelFamilies: ['gemini'] },
+      { id: 'Aoede', name: 'Aoede', language: 'en', gender: 'neutral', compatibleModelFamilies: ['gemini'] },
+      { id: 'alice', name: 'Alice', language: 'en', gender: 'female', compatibleModelFamilies: ['elevenlabs'] },
+      { id: 'aria', name: 'Aria', language: 'en', gender: 'female', compatibleModelFamilies: ['elevenlabs'] },
+      { id: 'brian', name: 'Brian', language: 'en', gender: 'male', compatibleModelFamilies: ['elevenlabs'] },
     ],
-    supportedFormats: ['mp3', 'opus', 'aac', 'flac'],
+    supportedFormats: ['mp3', 'wav'],
     speedRange: { min: 0.25, max: 4.0, default: 1.0 },
   },
 
@@ -1092,6 +982,86 @@ export const TTS_PROVIDERS: Record<TTSProviderId, TTSProviderConfig> = {
     supportedFormats: ['browser'], // Browser native audio
     speedRange: { min: 0.1, max: 10.0, default: 1.0 },
   },
+
+  'lemonade-tts': {
+    id: 'lemonade-tts',
+    name: 'Lemonade TTS',
+    requiresApiKey: false,
+    defaultBaseUrl: 'http://localhost:13305/v1',
+    icon: '/logos/lemonade.svg',
+    models: [{ id: 'kokoro-v1', name: 'Kokoro v1' }],
+    defaultModelId: 'kokoro-v1',
+    voices: [
+      // American English — female
+      { id: 'af_alloy', name: 'Alloy', language: 'en-US', gender: 'female' },
+      { id: 'af_aoede', name: 'Aoede', language: 'en-US', gender: 'female' },
+      { id: 'af_bella', name: 'Bella', language: 'en-US', gender: 'female' },
+      { id: 'af_heart', name: 'Heart', language: 'en-US', gender: 'female' },
+      { id: 'af_jessica', name: 'Jessica', language: 'en-US', gender: 'female' },
+      { id: 'af_kore', name: 'Kore', language: 'en-US', gender: 'female' },
+      { id: 'af_nicole', name: 'Nicole', language: 'en-US', gender: 'female' },
+      { id: 'af_nova', name: 'Nova', language: 'en-US', gender: 'female' },
+      { id: 'af_river', name: 'River', language: 'en-US', gender: 'female' },
+      { id: 'af_sarah', name: 'Sarah', language: 'en-US', gender: 'female' },
+      { id: 'af_sky', name: 'Sky', language: 'en-US', gender: 'female' },
+      // American English — male
+      { id: 'am_adam', name: 'Adam', language: 'en-US', gender: 'male' },
+      { id: 'am_echo', name: 'Echo', language: 'en-US', gender: 'male' },
+      { id: 'am_eric', name: 'Eric', language: 'en-US', gender: 'male' },
+      { id: 'am_fenrir', name: 'Fenrir', language: 'en-US', gender: 'male' },
+      { id: 'am_liam', name: 'Liam', language: 'en-US', gender: 'male' },
+      { id: 'am_michael', name: 'Michael', language: 'en-US', gender: 'male' },
+      { id: 'am_onyx', name: 'Onyx', language: 'en-US', gender: 'male' },
+      { id: 'am_puck', name: 'Puck', language: 'en-US', gender: 'male' },
+      // British English — female
+      { id: 'bf_alice', name: 'Alice', language: 'en-GB', gender: 'female' },
+      { id: 'bf_emma', name: 'Emma', language: 'en-GB', gender: 'female' },
+      { id: 'bf_isabella', name: 'Isabella', language: 'en-GB', gender: 'female' },
+      { id: 'bf_lily', name: 'Lily', language: 'en-GB', gender: 'female' },
+      // British English — male
+      { id: 'bm_daniel', name: 'Daniel', language: 'en-GB', gender: 'male' },
+      { id: 'bm_fable', name: 'Fable', language: 'en-GB', gender: 'male' },
+      { id: 'bm_george', name: 'George', language: 'en-GB', gender: 'male' },
+      { id: 'bm_lewis', name: 'Lewis', language: 'en-GB', gender: 'male' },
+      // Mandarin Chinese — female
+      { id: 'zf_xiaobei', name: '晓贝', language: 'zh-CN', gender: 'female' },
+      { id: 'zf_xiaoni', name: '晓妮', language: 'zh-CN', gender: 'female' },
+      { id: 'zf_xiaoxiao', name: '晓晓', language: 'zh-CN', gender: 'female' },
+      { id: 'zf_xiaoyi', name: '晓伊', language: 'zh-CN', gender: 'female' },
+      // Mandarin Chinese — male
+      { id: 'zm_yunjian', name: '云健', language: 'zh-CN', gender: 'male' },
+      { id: 'zm_yunxi', name: '云希', language: 'zh-CN', gender: 'male' },
+      { id: 'zm_yunxia', name: '云夏', language: 'zh-CN', gender: 'male' },
+      { id: 'zm_yunyang', name: '云扬', language: 'zh-CN', gender: 'male' },
+      // Japanese — female
+      { id: 'jf_alpha', name: 'Alpha', language: 'ja-JP', gender: 'female' },
+      { id: 'jf_gongitsune', name: 'Gongitsune', language: 'ja-JP', gender: 'female' },
+      { id: 'jf_nezumi', name: 'Nezumi', language: 'ja-JP', gender: 'female' },
+      { id: 'jf_tebukuro', name: 'Tebukuro', language: 'ja-JP', gender: 'female' },
+      // Japanese — male
+      { id: 'jm_kumo', name: 'Kumo', language: 'ja-JP', gender: 'male' },
+      // Spanish
+      { id: 'ef_dora', name: 'Dora', language: 'es-ES', gender: 'female' },
+      { id: 'em_alex', name: 'Alex', language: 'es-ES', gender: 'male' },
+      { id: 'em_santa', name: 'Santa', language: 'es-ES', gender: 'male' },
+      // French
+      { id: 'ff_siwis', name: 'Siwis', language: 'fr-FR', gender: 'female' },
+      // Hindi
+      { id: 'hf_alpha', name: 'Alpha', language: 'hi-IN', gender: 'female' },
+      { id: 'hf_beta', name: 'Beta', language: 'hi-IN', gender: 'female' },
+      { id: 'hm_omega', name: 'Omega', language: 'hi-IN', gender: 'male' },
+      { id: 'hm_psi', name: 'Psi', language: 'hi-IN', gender: 'male' },
+      // Italian
+      { id: 'if_sara', name: 'Sara', language: 'it-IT', gender: 'female' },
+      { id: 'im_nicola', name: 'Nicola', language: 'it-IT', gender: 'male' },
+      // Brazilian Portuguese
+      { id: 'pf_dora', name: 'Dora', language: 'pt-BR', gender: 'female' },
+      { id: 'pm_alex', name: 'Alex', language: 'pt-BR', gender: 'male' },
+      { id: 'pm_santa', name: 'Santa', language: 'pt-BR', gender: 'male' },
+    ],
+    supportedFormats: ['wav'],
+    speedRange: { min: 0.25, max: 4.0, default: 1.0 },
+  },
 };
 
 /**
@@ -1100,7 +1070,7 @@ export const TTS_PROVIDERS: Record<TTSProviderId, TTSProviderConfig> = {
  * Central registry for all ASR providers.
  * Keep in sync with ASRProviderId type definition.
  */
-export const ASR_PROVIDERS: Record<ASRProviderId, ASRProviderConfig> = {
+export const ASR_PROVIDERS: Record<BuiltInASRProviderId, ASRProviderConfig> = {
   'openai-whisper': {
     id: 'openai-whisper',
     name: 'OpenAI Whisper',
@@ -1225,82 +1195,6 @@ export const ASR_PROVIDERS: Record<ASRProviderId, ASRProviderConfig> = {
     supportedFormats: ['mp3', 'wav', 'webm', 'm4a', 'flac'],
   },
 
-  'navy-asr': {
-    id: 'navy-asr',
-    name: 'Navy ASR',
-    requiresApiKey: true,
-    defaultBaseUrl: 'https://api.navy/v1',
-    icon: '/logos/navy.svg',
-    models: [
-      { id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' },
-      { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' },
-      { id: 'whisper-1', name: 'Whisper-1' },
-      { id: 'scribe_v2', name: 'Scribe v2' },
-    ],
-    defaultModelId: 'gpt-4o-mini-transcribe',
-    supportedLanguages: [
-      'auto',
-      'zh',
-      'en',
-      'ja',
-      'ko',
-      'es',
-      'fr',
-      'de',
-      'ru',
-      'ar',
-      'pt',
-      'it',
-      'hi',
-      'af',
-      'hy',
-      'az',
-      'be',
-      'bs',
-      'bg',
-      'ca',
-      'hr',
-      'cs',
-      'da',
-      'nl',
-      'et',
-      'fi',
-      'gl',
-      'el',
-      'he',
-      'hu',
-      'is',
-      'id',
-      'kn',
-      'kk',
-      'lv',
-      'lt',
-      'mk',
-      'ms',
-      'mr',
-      'mi',
-      'ne',
-      'no',
-      'fa',
-      'pl',
-      'ro',
-      'sr',
-      'sk',
-      'sl',
-      'sw',
-      'sv',
-      'tl',
-      'ta',
-      'th',
-      'tr',
-      'uk',
-      'ur',
-      'vi',
-      'cy',
-    ],
-    supportedFormats: ['mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm'],
-  },
-
   'browser-native': {
     id: 'browser-native',
     name: '浏览器原生 ASR (Web Speech API)',
@@ -1367,74 +1261,140 @@ export const ASR_PROVIDERS: Record<ASRProviderId, ASRProviderConfig> = {
     ],
     supportedFormats: ['webm'], // MediaRecorder format
   },
+
+  'lemonade-asr': {
+    id: 'lemonade-asr',
+    name: 'Lemonade ASR',
+    requiresApiKey: false,
+    defaultBaseUrl: 'http://localhost:13305/v1',
+    icon: '/logos/lemonade.svg',
+    models: [
+      { id: 'Whisper-Base', name: 'Whisper Base' },
+      { id: 'Whisper-Large-v3', name: 'Whisper Large v3' },
+      { id: 'Whisper-Large-v3-Turbo', name: 'Whisper Large v3 Turbo' },
+      { id: 'Whisper-Medium', name: 'Whisper Medium' },
+      { id: 'Whisper-Small', name: 'Whisper Small' },
+      { id: 'Whisper-Tiny', name: 'Whisper Tiny' },
+    ],
+    defaultModelId: 'Whisper-Base',
+    supportedLanguages: CUSTOM_ASR_DEFAULT_LANGUAGES,
+    supportedFormats: ['wav'],
+  },
+
+  'navy-asr': {
+    id: 'navy-asr',
+    name: 'Navy ASR',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://api.navy/v1',
+    icon: '/logos/navy.svg',
+    models: [
+      { id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' },
+      { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' },
+      { id: 'whisper-1', name: 'Whisper-1' },
+      { id: 'scribe_v2', name: 'Scribe v2' },
+    ],
+    defaultModelId: 'gpt-4o-mini-transcribe',
+    supportedLanguages: ['auto', 'zh', 'en', 'ja', 'ko', 'es', 'fr', 'de', 'ru', 'ar', 'pt', 'it', 'hi'],
+    supportedFormats: ['mp3', 'wav', 'webm', 'm4a', 'flac'],
+  },
 };
-
-/**
- * Get all available TTS providers
- */
-export function getAllTTSProviders(): TTSProviderConfig[] {
-  return Object.values(TTS_PROVIDERS);
-}
-
-/**
- * Get TTS provider by ID
- */
-export function getTTSProvider(providerId: TTSProviderId): TTSProviderConfig | undefined {
-  return TTS_PROVIDERS[providerId];
-}
 
 /**
  * Default voice for each TTS provider.
  * Used when switching providers or testing a non-active provider.
  */
-export const DEFAULT_TTS_VOICES: Record<TTSProviderId, string> = {
+export const DEFAULT_TTS_VOICES: Record<BuiltInTTSProviderId, string> = {
   'openai-tts': 'alloy',
   'azure-tts': 'zh-CN-XiaoxiaoNeural',
   'glm-tts': 'tongtong',
   'qwen-tts': 'Cherry',
+  'voxcpm-tts': VOXCPM_AUTO_VOICE_ID,
   'doubao-tts': 'zh_female_vv_uranus_bigtts',
   'elevenlabs-tts': 'EXAVITQu4vr4xnSDxMaL',
   'minimax-tts': 'female-yujie',
+  'lemonade-tts': 'af_heart',
   'navy-tts': 'alloy',
   'browser-native-tts': 'default',
 };
 
-export const DEFAULT_TTS_MODELS: Record<TTSProviderId, string> = {
+export const DEFAULT_TTS_MODELS: Record<BuiltInTTSProviderId, string> = {
   'openai-tts': 'gpt-4o-mini-tts',
   'azure-tts': '',
   'glm-tts': 'glm-tts',
   'qwen-tts': 'qwen3-tts-flash',
+  'voxcpm-tts': VOXCPM_VLLM_MODEL_ID,
   'doubao-tts': '',
   'elevenlabs-tts': 'eleven_multilingual_v2',
   'minimax-tts': 'speech-2.8-hd',
+  'lemonade-tts': 'kokoro-v1',
   'navy-tts': 'gpt-4o-mini-tts',
   'browser-native-tts': '',
 };
 
 /**
+ * Get all available TTS providers (built-in + custom)
+ */
+export function getAllTTSProviders(
+  customProviders?: Record<string, TTSProviderConfig>,
+): TTSProviderConfig[] {
+  const builtIn = Object.values(TTS_PROVIDERS);
+  const custom = customProviders ? Object.values(customProviders) : [];
+  return [...builtIn, ...custom];
+}
+
+/**
+ * Get TTS provider by ID (checks built-in first, then custom)
+ */
+export function getTTSProvider(
+  providerId: TTSProviderId,
+  customProviders?: Record<string, TTSProviderConfig>,
+): TTSProviderConfig | undefined {
+  if (providerId in TTS_PROVIDERS) {
+    return TTS_PROVIDERS[providerId as BuiltInTTSProviderId];
+  }
+  return customProviders?.[providerId];
+}
+
+/**
  * Get voices for a specific TTS provider
  */
-export function getTTSVoices(providerId: TTSProviderId): TTSVoiceInfo[] {
-  return TTS_PROVIDERS[providerId]?.voices || [];
+export function getTTSVoices(
+  providerId: TTSProviderId,
+  customProviders?: Record<string, TTSProviderConfig>,
+): TTSVoiceInfo[] {
+  return getTTSProvider(providerId, customProviders)?.voices || [];
 }
 
 /**
- * Get all available ASR providers
+ * Get all available ASR providers (built-in + custom)
  */
-export function getAllASRProviders(): ASRProviderConfig[] {
-  return Object.values(ASR_PROVIDERS);
+export function getAllASRProviders(
+  customProviders?: Record<string, ASRProviderConfig>,
+): ASRProviderConfig[] {
+  const builtIn = Object.values(ASR_PROVIDERS);
+  const custom = customProviders ? Object.values(customProviders) : [];
+  return [...builtIn, ...custom];
 }
 
 /**
- * Get ASR provider by ID
+ * Get ASR provider by ID (checks built-in first, then custom)
  */
-export function getASRProvider(providerId: ASRProviderId): ASRProviderConfig | undefined {
-  return ASR_PROVIDERS[providerId];
+export function getASRProvider(
+  providerId: ASRProviderId,
+  customProviders?: Record<string, ASRProviderConfig>,
+): ASRProviderConfig | undefined {
+  if (providerId in ASR_PROVIDERS) {
+    return ASR_PROVIDERS[providerId as BuiltInASRProviderId];
+  }
+  return customProviders?.[providerId];
 }
 
 /**
  * Get supported languages for a specific ASR provider
  */
-export function getASRSupportedLanguages(providerId: ASRProviderId): string[] {
-  return ASR_PROVIDERS[providerId]?.supportedLanguages || [];
+export function getASRSupportedLanguages(
+  providerId: ASRProviderId,
+  customProviders?: Record<string, ASRProviderConfig>,
+): string[] {
+  return getASRProvider(providerId, customProviders)?.supportedLanguages || [];
 }

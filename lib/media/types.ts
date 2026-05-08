@@ -6,6 +6,7 @@
  *
  * Currently Supported Image Providers:
  * - Seedream (ByteDance SDXL-based image generation)
+ * - OpenAI Image (GPT Image API)
  * - Qwen Image (Alibaba Cloud Wanx image generation)
  * - Nano Banana (Lightweight image generation via Banana.dev)
  *
@@ -71,11 +72,13 @@
  */
 export type ImageProviderId =
   | 'seedream'
+  | 'openai-image'
   | 'qwen-image'
   | 'nano-banana'
   | 'minimax-image'
   | 'grok-image'
-  | 'navy-image';
+  | 'navy-image'
+  | 'lemonade';
 // Add new image providers below (uncomment and modify):
 // | 'dall-e'
 // | 'midjourney'

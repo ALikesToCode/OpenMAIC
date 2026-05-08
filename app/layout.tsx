@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/lib/hooks/use-theme';
 import { I18nProvider } from '@/lib/hooks/use-i18n';
 import { Toaster } from '@/components/ui/sonner';
 import { ServerProvidersInit } from '@/components/server-providers-init';
+import { AccessCodeGuard } from '@/components/access-code-guard';
 
 const geistSans = localFont({
   src: '../node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2',
@@ -40,7 +41,7 @@ export default function RootLayout({
         <ThemeProvider>
           <I18nProvider>
             <ServerProvidersInit />
-            {children}
+            <AccessCodeGuard>{children}</AccessCodeGuard>
             <Toaster position="top-center" />
           </I18nProvider>
         </ThemeProvider>

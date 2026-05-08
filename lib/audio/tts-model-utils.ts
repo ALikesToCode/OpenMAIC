@@ -1,5 +1,6 @@
 import { TTS_PROVIDERS } from '@/lib/audio/constants';
-import type { TTSProviderId, TTSVoiceInfo } from '@/lib/audio/types';
+import type { BuiltInTTSProviderId, TTSProviderId, TTSVoiceInfo } from '@/lib/audio/types';
+import { isCustomTTSProvider } from '@/lib/audio/types';
 
 export interface TTSCustomModelEntry {
   id: string;
@@ -23,6 +24,11 @@ export interface TTSModelVoiceGroup {
 }
 
 type TTSModelFamily = 'openai' | 'gemini' | 'elevenlabs';
+
+function getBuiltInTTSProvider(providerId: TTSProviderId) {
+  if (isCustomTTSProvider(providerId)) return undefined;
+  return TTS_PROVIDERS[providerId as BuiltInTTSProviderId];
+}
 
 function inferNavyTTSModelFamily(modelId?: string): TTSModelFamily | undefined {
   if (!modelId) return undefined;
@@ -60,7 +66,7 @@ export function getMergedTTSModels(
   providerId: TTSProviderId,
   providerConfig?: TTSProviderRuntimeConfig,
 ): TTSMergedModelEntry[] {
-  const provider = TTS_PROVIDERS[providerId];
+  const provider = getBuiltInTTSProvider(providerId);
   if (!provider) return [];
 
   const mergedModels: TTSMergedModelEntry[] = [];
@@ -94,7 +100,7 @@ export function resolveTTSModelId(
   currentModelId?: string,
   providerConfig?: TTSProviderRuntimeConfig,
 ): string {
-  const provider = TTS_PROVIDERS[providerId];
+  const provider = getBuiltInTTSProvider(providerId);
   if (!provider) return '';
 
   const availableModels = getMergedTTSModels(providerId, providerConfig);
@@ -117,12 +123,12 @@ export function getCompatibleTTSVoices(
   providerId: TTSProviderId,
   modelId?: string,
 ): Array<{ id: string; name: string }> {
-  const provider = TTS_PROVIDERS[providerId];
+  const provider = getBuiltInTTSProvider(providerId);
   if (!provider || provider.voices.length === 0) return [];
 
   return provider.voices
-    .filter((voice) => isVoiceCompatibleWithModel(providerId, voice, modelId))
-    .map((voice) => ({
+    .filter((voice: TTSVoiceInfo) => isVoiceCompatibleWithModel(providerId, voice, modelId))
+    .map((voice: TTSVoiceInfo) => ({
       id: voice.id,
       name: voice.name,
     }));
@@ -150,7 +156,7 @@ export function getTTSModelVoiceGroups(
   providerId: TTSProviderId,
   providerConfig?: TTSProviderRuntimeConfig,
 ): TTSModelVoiceGroup[] {
-  const provider = TTS_PROVIDERS[providerId];
+  const provider = getBuiltInTTSProvider(providerId);
   if (!provider || provider.voices.length === 0) return [];
 
   const models = getMergedTTSModels(providerId, providerConfig);
