@@ -43,9 +43,7 @@ describe('selectRelevantPdfContext', () => {
           return [[1, 0]];
         }
 
-        return items.map((item) =>
-          item.includes('mitochondria') ? [0.98, 0] : [0, 1],
-        );
+        return items.map((item) => (item.includes('mitochondria') ? [0.98, 0] : [0, 1]));
       },
     });
 

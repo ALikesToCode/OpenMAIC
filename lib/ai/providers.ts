@@ -23,12 +23,7 @@
  * - https://www.volcengine.com/docs/82379/1330310
  */
 
-import type {
-  ProviderId,
-  ProviderConfig,
-  ModelInfo,
-  ModelConfig,
-} from '@/lib/types/provider';
+import type { ProviderId, ProviderConfig, ModelInfo, ModelConfig } from '@/lib/types/provider';
 import { applyModelMetadata } from './model-metadata';
 import { createLogger } from '@/lib/logger';
 

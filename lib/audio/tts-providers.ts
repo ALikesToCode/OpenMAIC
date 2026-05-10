@@ -266,10 +266,7 @@ async function generateLemonadeTTS(
 /**
  * Navy TTS implementation (OpenAI-compatible /v1/audio/speech).
  */
-async function generateNavyTTS(
-  config: TTSModelConfig,
-  text: string,
-): Promise<TTSGenerationResult> {
+async function generateNavyTTS(config: TTSModelConfig, text: string): Promise<TTSGenerationResult> {
   const baseUrl = (config.baseUrl || TTS_PROVIDERS['navy-tts'].defaultBaseUrl || '').replace(
     /\/$/,
     '',

@@ -91,9 +91,10 @@ function shouldUseServerApiKey(params: {
   );
 }
 
-export function resolveProviderRequestConfig(
-  params: ResolveProviderRequestConfigParams,
-): { apiKey: string; baseUrl?: string } {
+export function resolveProviderRequestConfig(params: ResolveProviderRequestConfigParams): {
+  apiKey: string;
+  baseUrl?: string;
+} {
   const { surface, providerId, clientApiKey, clientBaseUrl } = params;
   const serverBaseUrl = resolveServerBaseUrl(surface, providerId);
 

@@ -111,10 +111,7 @@ export function createAdaptiveTaskQueue<T>(
   taskFactories: Array<() => Promise<T>>,
   options: AdaptiveTaskQueueOptions = {},
 ): Array<Promise<AdaptiveTaskResult<T>>> {
-  const minConcurrency = Math.max(
-    1,
-    Math.floor(options.minConcurrency ?? DEFAULT_MIN_CONCURRENCY),
-  );
+  const minConcurrency = Math.max(1, Math.floor(options.minConcurrency ?? DEFAULT_MIN_CONCURRENCY));
   const maxConcurrency = Math.max(
     minConcurrency,
     Math.floor(options.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY),
@@ -202,11 +199,8 @@ export function createAdaptiveTaskQueue<T>(
         }
         failureCooldownMs =
           failureCooldownMs > 0
-            ? Math.min(
-                options.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS,
-                failureCooldownMs * 2,
-              )
-            : options.baseRetryDelayMs ?? DEFAULT_BASE_RETRY_DELAY_MS;
+            ? Math.min(options.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS, failureCooldownMs * 2)
+            : (options.baseRetryDelayMs ?? DEFAULT_BASE_RETRY_DELAY_MS);
         nextStartAt = Math.max(nextStartAt, Date.now() + failureCooldownMs);
       }
     } catch (error) {

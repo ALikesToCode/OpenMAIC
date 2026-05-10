@@ -161,7 +161,10 @@ export async function generateSceneOutlinesFromRequirements(
       return { success: false, error: 'Failed to parse scene outlines response' };
     }
     if (rawOutlines.length === 0) {
-      return { success: false, error: 'Failed to generate scene outlines response: empty outlines' };
+      return {
+        success: false,
+        error: 'Failed to generate scene outlines response: empty outlines',
+      };
     }
 
     // Ensure IDs and order

@@ -40,9 +40,10 @@ export async function generateAndStoreTTSAudio(
     signal,
   });
 
-  const data = (await response
-    .json()
-    .catch(() => ({ success: false, error: response.statusText || 'Invalid TTS response' }))) as TTSGenerationApiResponse;
+  const data = (await response.json().catch(() => ({
+    success: false,
+    error: response.statusText || 'Invalid TTS response',
+  }))) as TTSGenerationApiResponse;
 
   if (!response.ok || !data.success || !data.base64 || !data.format) {
     const error = new Error(

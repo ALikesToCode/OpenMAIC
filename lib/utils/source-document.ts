@@ -146,9 +146,7 @@ export interface SourceDocumentInput {
 
 export interface ParsedSourceDocumentResult {
   text: string;
-  images?: Array<
-    Pick<PdfImage, 'id' | 'src' | 'pageNumber' | 'description' | 'width' | 'height'>
-  >;
+  images?: Array<Pick<PdfImage, 'id' | 'src' | 'pageNumber' | 'description' | 'width' | 'height'>>;
 }
 
 export interface ResolvedSourceDocuments {

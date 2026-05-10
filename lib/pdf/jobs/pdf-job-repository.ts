@@ -66,10 +66,7 @@ export async function updatePDFJobRecord(
     .run();
 }
 
-export async function getPDFJobRecord(
-  db: D1Database,
-  jobId: string,
-): Promise<PDFJobRecord | null> {
+export async function getPDFJobRecord(db: D1Database, jobId: string): Promise<PDFJobRecord | null> {
   const row = await db
     .prepare(
       `SELECT id, status, requested_provider_id, processing_mode, file_name, file_size,

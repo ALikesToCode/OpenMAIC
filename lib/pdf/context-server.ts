@@ -135,9 +135,7 @@ async function embedWithNavy(
   return payload.data?.map((item) => item.embedding || []) || [];
 }
 
-function buildServerEmbedder():
-  | NonNullable<SelectRelevantPdfContextInput['embedder']>
-  | undefined {
+function buildServerEmbedder(): NonNullable<SelectRelevantPdfContextInput['embedder']> | undefined {
   if (resolveApiKey('navy')) {
     return async (items, taskType) => embedWithNavy(items, taskType);
   }

@@ -68,7 +68,9 @@ describe('playMediaSafely', () => {
 
   it('rethrows the extension error if playback never actually starts', async () => {
     const media = new FakeMediaElement(() =>
-      Promise.reject(new TypeError(`can't access property "speedIndicator", video.vsc is undefined`)),
+      Promise.reject(
+        new TypeError(`can't access property "speedIndicator", video.vsc is undefined`),
+      ),
     );
 
     await expect(playMediaSafely(media)).rejects.toThrow('speedIndicator');
@@ -83,7 +85,9 @@ describe('playMediaSafely', () => {
 
   it('formats playback errors into stable log strings', () => {
     expect(
-      formatMediaPlaybackError(new DOMException('The play() request was interrupted', 'AbortError')),
+      formatMediaPlaybackError(
+        new DOMException('The play() request was interrupted', 'AbortError'),
+      ),
     ).toBe('AbortError: The play() request was interrupted');
   });
 });

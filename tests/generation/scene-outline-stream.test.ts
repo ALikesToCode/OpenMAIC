@@ -36,13 +36,15 @@ describe('streamSceneOutlines', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn<typeof fetch>().mockResolvedValue(
-        createOutlineResponse([
-          'data: {"type":"outline","data":\n',
-          `data: ${JSON.stringify({ type: 'outline', data: outline })}\n`,
-          'data: {"type":"done"}\n',
-        ]),
-      ),
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          createOutlineResponse([
+            'data: {"type":"outline","data":\n',
+            `data: ${JSON.stringify({ type: 'outline', data: outline })}\n`,
+            'data: {"type":"done"}\n',
+          ]),
+        ),
     );
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});

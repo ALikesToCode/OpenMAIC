@@ -96,12 +96,8 @@ export async function GET() {
       llm: mapModels(byEndpoint.get('/v1/chat/completions') || []),
       asr: mapModels(byEndpoint.get('/v1/audio/transcriptions') || []),
       tts: mapModels(byEndpoint.get('/v1/audio/speech') || []),
-      image: mapModels(
-        imageAndVideo.filter((model) => !/video|veo|cogvideo/i.test(model.id)),
-      ),
-      video: mapModels(
-        imageAndVideo.filter((model) => /video|veo|cogvideo/i.test(model.id)),
-      ),
+      image: mapModels(imageAndVideo.filter((model) => !/video|veo|cogvideo/i.test(model.id))),
+      video: mapModels(imageAndVideo.filter((model) => /video|veo|cogvideo/i.test(model.id))),
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {

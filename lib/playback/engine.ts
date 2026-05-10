@@ -531,11 +531,7 @@ export class PlaybackEngine {
                 }
               }
 
-              if (
-                settings.ttsEnabled &&
-                typeof window !== 'undefined' &&
-                window.speechSynthesis
-              ) {
+              if (settings.ttsEnabled && typeof window !== 'undefined' && window.speechSynthesis) {
                 this.playBrowserTTS(speechAction);
                 return;
               }
@@ -564,11 +560,7 @@ export class PlaybackEngine {
               }
             }
 
-            if (
-              settings.ttsEnabled &&
-              typeof window !== 'undefined' &&
-              window.speechSynthesis
-            ) {
+            if (settings.ttsEnabled && typeof window !== 'undefined' && window.speechSynthesis) {
               this.playBrowserTTS(speechAction, { progressRatio });
               return;
             }
@@ -688,10 +680,7 @@ export class PlaybackEngine {
 
   private getApproximateAudioProgressRatio(): number | null {
     const player = this.audioPlayer as Partial<AudioPlayer>;
-    if (
-      typeof player.getCurrentTime !== 'function' ||
-      typeof player.getDuration !== 'function'
-    ) {
+    if (typeof player.getCurrentTime !== 'function' || typeof player.getDuration !== 'function') {
       return null;
     }
 

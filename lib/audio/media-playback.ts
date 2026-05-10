@@ -14,10 +14,7 @@ type MediaPlaybackTarget = {
   ) => void;
 };
 
-const VIDEO_SPEED_CONTROLLER_ERROR_PATTERNS = [
-  'speedIndicator',
-  'video.vsc',
-] as const;
+const VIDEO_SPEED_CONTROLLER_ERROR_PATTERNS = ['speedIndicator', 'video.vsc'] as const;
 
 const MEDIA_PLAYBACK_REJECTION_NAMES = new Set([
   'AbortError',
@@ -31,7 +28,10 @@ function isIgnorableExternalPlaybackError(error: unknown): boolean {
   return VIDEO_SPEED_CONTROLLER_ERROR_PATTERNS.every((pattern) => message.includes(pattern));
 }
 
-function waitForPlaybackConfirmation(media: MediaPlaybackTarget, timeoutMs = 250): Promise<boolean> {
+function waitForPlaybackConfirmation(
+  media: MediaPlaybackTarget,
+  timeoutMs = 250,
+): Promise<boolean> {
   if (media.paused === false || (media.currentTime || 0) > 0) {
     return Promise.resolve(true);
   }

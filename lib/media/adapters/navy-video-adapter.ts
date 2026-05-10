@@ -80,8 +80,7 @@ function ratioToDimensions(
   aspectRatio: string,
   resolution?: VideoGenerationOptions['resolution'],
 ): { width: number; height: number } {
-  const baseHeight =
-    resolution === '1080p' ? 1080 : resolution === '480p' ? 480 : 720;
+  const baseHeight = resolution === '1080p' ? 1080 : resolution === '480p' ? 480 : 720;
 
   switch (aspectRatio) {
     case '9:16':
@@ -105,12 +104,7 @@ function extractJobId(payload: unknown): string | undefined {
 
   const data = payload as Record<string, unknown>;
 
-  const directCandidates = [
-    data.id,
-    data.job_id,
-    data.request_id,
-    data.generation_id,
-  ];
+  const directCandidates = [data.id, data.job_id, data.request_id, data.generation_id];
   for (const candidate of directCandidates) {
     if (typeof candidate === 'string' && candidate.trim()) {
       return candidate;
@@ -118,9 +112,7 @@ function extractJobId(payload: unknown): string | undefined {
   }
 
   const nestedData =
-    data.data && typeof data.data === 'object'
-      ? (data.data as Record<string, unknown>)
-      : undefined;
+    data.data && typeof data.data === 'object' ? (data.data as Record<string, unknown>) : undefined;
 
   if (nestedData) {
     const nestedCandidates = [
@@ -139,20 +131,12 @@ function extractJobId(payload: unknown): string | undefined {
   return undefined;
 }
 
-function extractMediaResult(
-  payload: unknown,
-): { url?: string; poster?: string } | null {
+function extractMediaResult(payload: unknown): { url?: string; poster?: string } | null {
   if (!payload || typeof payload !== 'object') return null;
 
   const obj = payload as Record<string, unknown>;
 
-  const directUrlCandidates = [
-    obj.url,
-    obj.video_url,
-    obj.output_url,
-    obj.download_url,
-    obj.href,
-  ];
+  const directUrlCandidates = [obj.url, obj.video_url, obj.output_url, obj.download_url, obj.href];
   for (const candidate of directUrlCandidates) {
     if (isUrl(candidate)) {
       return {
@@ -230,10 +214,7 @@ async function submitVideoJob(
   return jobId;
 }
 
-async function pollJob(
-  config: VideoGenerationConfig,
-  jobId: string,
-): Promise<NavyPollingResponse> {
+async function pollJob(config: VideoGenerationConfig, jobId: string): Promise<NavyPollingResponse> {
   const baseUrl = normalizeBaseUrl(config.baseUrl);
   const response = await fetch(`${baseUrl}/images/generations/${encodeURIComponent(jobId)}`, {
     method: 'GET',
@@ -345,9 +326,7 @@ export async function generateWithNavyVideo(
     }
 
     if (status === 'failed') {
-      throw new Error(
-        `Navy video generation failed: ${stringifyError(result.error || result)}`,
-      );
+      throw new Error(`Navy video generation failed: ${stringifyError(result.error || result)}`);
     }
   }
 

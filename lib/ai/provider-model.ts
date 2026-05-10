@@ -98,7 +98,8 @@ function getCompatThinkingBodyParams(
       if (mode === 'enabled') reasoning.enabled = true;
       if (config.effort) reasoning.effort = config.effort;
       if (budget !== undefined) reasoning.max_tokens = budget;
-      if (typeof config.excludeReasoningOutput === 'boolean') reasoning.exclude = config.excludeReasoningOutput;
+      if (typeof config.excludeReasoningOutput === 'boolean')
+        reasoning.exclude = config.excludeReasoningOutput;
       return Object.keys(reasoning).length > 0 ? { reasoning } : undefined;
     }
 
@@ -117,7 +118,9 @@ function getCompatThinkingBodyParams(
       } else if (mode === 'enabled') {
         reasoningEffort = capability.defaultEffort === 'high' ? 'high' : 'low';
       }
-      return reasoningEffort ? { chat_template_kwargs: { reasoning_effort: reasoningEffort } } : undefined;
+      return reasoningEffort
+        ? { chat_template_kwargs: { reasoning_effort: reasoningEffort } }
+        : undefined;
     }
 
     case 'lemonade': {

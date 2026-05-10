@@ -14,17 +14,15 @@ const resources = {
   'ru-RU': { translation: ruRU },
 } as const;
 
-i18n
-  .use(initReactI18next)
-  .init({
-    resources,
-    lng: defaultLocale,
-    fallbackLng: defaultLocale,
-    supportedLngs: supportedLocales.map((l) => l.code),
-    initAsync: false,
-    interpolation: {
-      escapeValue: false,
-    },
-  });
+i18n.use(initReactI18next).init({
+  resources,
+  lng: defaultLocale,
+  fallbackLng: defaultLocale,
+  supportedLngs: supportedLocales.map((l) => l.code),
+  initAsync: false,
+  interpolation: {
+    escapeValue: false,
+  },
+});
 
 export default i18n;

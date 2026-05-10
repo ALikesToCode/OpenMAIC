@@ -8,9 +8,7 @@ export type AutomaticRetryFailure<E> = {
   error: E;
 };
 
-export type AutomaticRetryAttemptResult<T, E> =
-  | AutomaticRetrySuccess<T>
-  | AutomaticRetryFailure<E>;
+export type AutomaticRetryAttemptResult<T, E> = AutomaticRetrySuccess<T> | AutomaticRetryFailure<E>;
 
 export type AutomaticRetryResult<T, E> = (AutomaticRetrySuccess<T> | AutomaticRetryFailure<E>) & {
   attempts: number;

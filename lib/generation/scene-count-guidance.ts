@@ -28,7 +28,13 @@ export function inferAutomaticSceneCountTarget(input: SceneCountSignalInput): nu
   const requirementPressure =
     requirementLength > 1200 ? 18 : requirementLength > 600 ? 14 : requirementLength > 240 ? 10 : 8;
   const researchPressure =
-    researchContextLength > 12000 ? 4 : researchContextLength > 4000 ? 2 : researchContextLength > 0 ? 1 : 0;
+    researchContextLength > 12000
+      ? 4
+      : researchContextLength > 4000
+        ? 2
+        : researchContextLength > 0
+          ? 1
+          : 0;
 
   return clamp(
     Math.max(12, pagePressure, textPressure, requirementPressure + researchPressure),
@@ -37,7 +43,9 @@ export function inferAutomaticSceneCountTarget(input: SceneCountSignalInput): nu
   );
 }
 
-export function inferAutomaticExtensionSceneTarget(input: SceneCountSignalInput & { existingSceneCount?: number }): number {
+export function inferAutomaticExtensionSceneTarget(
+  input: SceneCountSignalInput & { existingSceneCount?: number },
+): number {
   const automaticTarget = inferAutomaticSceneCountTarget(input);
   const existingSceneCount = input.existingSceneCount ?? 0;
   const remainingNeed = automaticTarget - existingSceneCount;

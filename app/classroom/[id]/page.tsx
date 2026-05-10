@@ -253,9 +253,7 @@ export default function ClassroomDetailPage() {
           userProfile: generationContext.userProfile,
         });
 
-        toast.success(
-          formatAdditionalScenesGeneratedMessage(additionalOutlines.length),
-        );
+        toast.success(formatAdditionalScenesGeneratedMessage(additionalOutlines.length));
       } catch (extensionError) {
         log.error('Failed to extend classroom:', extensionError);
         toast.error(

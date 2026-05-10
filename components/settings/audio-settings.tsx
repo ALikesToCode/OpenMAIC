@@ -223,11 +223,10 @@ export function AudioSettings({ onSave }: AudioSettingsProps = {}) {
         supportsClone: voxCPMBackendSupportsReferenceAudio(voxcpmBackend),
       });
     } else if (isCustomTTSProvider(ttsProviderId)) {
-      availableVoices = (
-        ttsProvidersConfig[ttsProviderId]?.customVoices as
+      availableVoices =
+        (ttsProvidersConfig[ttsProviderId]?.customVoices as
           | Array<{ id: string; name: string }>
-          | undefined
-      ) || [];
+          | undefined) || [];
     } else {
       // Use static voices from constants
       availableVoices = getTTSVoices(ttsProviderId);
