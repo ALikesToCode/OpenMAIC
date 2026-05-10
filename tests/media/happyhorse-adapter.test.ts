@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { pollHappyHorseTask, submitHappyHorseTask } from '@/lib/media/adapters/happyhorse-adapter';
+import {
+  pollHappyHorseTask,
+  submitHappyHorseTask,
+  testHappyHorseConnectivity,
+} from '@/lib/media/adapters/happyhorse-adapter';
 import type { VideoGenerationConfig } from '@/lib/media/types';
 
 const fetchMock = vi.fn();
@@ -104,5 +108,60 @@ describe('HappyHorse video adapter', () => {
     await expect(pollHappyHorseTask(config, 'task-123')).rejects.toThrow(
       'HappyHorse video generation failed: InvalidParameter: The parameter is invalid.',
     );
+  });
+
+  test('checks connectivity with the DashScope task list endpoint', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        request_id: 'request-123',
+        data: [],
+      }),
+    });
+
+    const result = await testHappyHorseConnectivity(config);
+
+    expect(result).toEqual({ success: true, message: 'Connected to HappyHorse' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://dashscope.aliyuncs.com/api/v1/tasks/?page_size=1',
+      {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer test-key',
+        },
+      },
+    );
+  });
+
+  test('reports non-ok connectivity responses as failures', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      text: async () => 'upstream unavailable',
+    });
+
+    const result = await testHappyHorseConnectivity(config);
+
+    expect(result).toEqual({
+      success: false,
+      message: 'HappyHorse connectivity failed (500): upstream unavailable',
+    });
+  });
+
+  test('keeps auth failures distinct from other connectivity failures', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+      text: async () => 'invalid api key',
+    });
+
+    const result = await testHappyHorseConnectivity(config);
+
+    expect(result).toEqual({
+      success: false,
+      message: 'HappyHorse auth failed (403): invalid api key',
+    });
   });
 });

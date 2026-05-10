@@ -51,6 +51,11 @@ interface HappyHorsePollResponse {
   message?: string;
 }
 
+interface HappyHorseTaskListResponse {
+  code?: string;
+  message?: string;
+}
+
 function normalizeBaseUrl(baseUrl?: string): string {
   return (baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '');
 }
@@ -193,16 +198,25 @@ export async function testHappyHorseConnectivity(
 ): Promise<{ success: boolean; message: string }> {
   try {
     const baseUrl = normalizeBaseUrl(config.baseUrl);
-    const response = await fetch(`${baseUrl}/api/v1/tasks/connectivity-test-nonexistent`, {
+    const response = await fetch(`${baseUrl}/api/v1/tasks/?page_size=1`, {
       method: 'GET',
       headers: authHeaders(config.apiKey),
     });
 
-    if (response.status === 401 || response.status === 403) {
-      const text = await response.text();
+    if (!response.ok) {
+      const text = await response.text().catch(() => response.statusText);
+      const reason = response.status === 401 || response.status === 403 ? 'auth' : 'connectivity';
       return {
         success: false,
-        message: `HappyHorse auth failed (${response.status}): ${text}`,
+        message: `HappyHorse ${reason} failed (${response.status}): ${text || response.statusText}`,
+      };
+    }
+
+    const data = (await response.json().catch(() => null)) as HappyHorseTaskListResponse | null;
+    if (data?.code || data?.message) {
+      return {
+        success: false,
+        message: `HappyHorse connectivity failed: ${getErrorMessage(data)}`,
       };
     }
 
