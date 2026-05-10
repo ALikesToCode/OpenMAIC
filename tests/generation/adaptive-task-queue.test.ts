@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { createAdaptiveTaskQueue } from '@/lib/generation/adaptive-task-queue';
 

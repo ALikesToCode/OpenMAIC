@@ -57,7 +57,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
 
   const currentConfig = imageProvidersConfig[selectedProviderId];
   const currentProvider = IMAGE_PROVIDERS[selectedProviderId];
-  const builtInModels = currentProvider?.models || [];
+  const builtInModels = useMemo(() => currentProvider?.models || [], [currentProvider?.models]);
   const customModels = useMemo(
     () => currentConfig?.customModels || [],
     [currentConfig?.customModels],

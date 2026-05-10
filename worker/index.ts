@@ -5,8 +5,10 @@ import type { CloudflareBindings } from '@/lib/cloudflare/bindings';
 export { PDFJobDurableObject } from '@/lib/pdf/jobs/pdf-job-do';
 export { MinerUContainer } from '@/lib/pdf/mineru-container';
 
-export default {
+const worker = {
   fetch(request: Request, env: CloudflareBindings, ctx: ExecutionContextLike) {
     return app.fetch(request, env, ctx);
   },
 };
+
+export default worker;

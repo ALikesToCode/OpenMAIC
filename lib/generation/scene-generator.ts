@@ -14,7 +14,6 @@ import type {
   GeneratedQuizContent,
   GeneratedInteractiveContent,
   GeneratedPBLContent,
-  ScientificModel,
   PdfImage,
   ImageMapping,
   WidgetOutline,

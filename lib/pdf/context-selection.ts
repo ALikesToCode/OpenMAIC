@@ -70,10 +70,6 @@ interface RankedChunk extends SelectedPdfContextChunk {
   keywordScore: number;
 }
 
-function normalizeWhitespace(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
-}
-
 function normalizeSearchText(value: string): string {
   return value
     .toLowerCase()
@@ -308,7 +304,8 @@ function buildContextString(chunks: SelectedPdfContextChunk[], maxChars: number)
       break;
     }
 
-    const text = chunk.text.length > remaining ? chunk.text.slice(0, remaining).trimEnd() : chunk.text;
+    const text =
+      chunk.text.length > remaining ? chunk.text.slice(0, remaining).trimEnd() : chunk.text;
     if (!text) {
       continue;
     }
@@ -356,8 +353,7 @@ export async function selectRelevantPdfContext({
   }
 
   const rankedCandidates = rankedChunks.filter((chunk) => chunk.score > 0);
-  const bestScore =
-    rankedCandidates.reduce((best, chunk) => Math.max(best, chunk.score), 0) || 0;
+  const bestScore = rankedCandidates.reduce((best, chunk) => Math.max(best, chunk.score), 0) || 0;
   const relevanceThreshold = bestScore > 0 ? bestScore * 0.35 : 0;
   const topRankedChunks = (rankedCandidates.length > 0 ? rankedCandidates : rankedChunks.slice())
     .filter((chunk) => rankedCandidates.length === 0 || chunk.score >= relevanceThreshold)
