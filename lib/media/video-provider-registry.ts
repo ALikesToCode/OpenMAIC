@@ -110,4 +110,15 @@ export const VIDEO_PROVIDERS: Record<VideoProviderId, VideoProviderConfig> = {
     supportedResolutions: ['480p', '720p', '1080p'],
     maxDuration: 10,
   },
+  happyhorse: {
+    id: 'happyhorse',
+    name: 'HappyHorse',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://dashscope.aliyuncs.com',
+    models: [{ id: 'happyhorse-1.0-t2v', name: 'HappyHorse 1.0 T2V' }],
+    supportedAspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+    supportedDurations: [5, 10, 15],
+    supportedResolutions: ['720p', '1080p'],
+    maxDuration: 15,
+  },
 };

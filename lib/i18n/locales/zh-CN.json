@@ -946,6 +946,7 @@
     "providerMiniMaxVideo": "MiniMax 视频",
     "providerGrokVideo": "Grok Video（xAI）",
     "providerNavyVideo": "Navy 视频",
+    "providerHappyHorse": "HappyHorse（阿里云百炼）",
     "testVideoGeneration": "测试视频生成",
     "testVideoConnectivity": "测试连接",
     "videoConnectivitySuccess": "视频服务连接成功",

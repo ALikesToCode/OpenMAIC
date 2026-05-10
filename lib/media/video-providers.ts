@@ -19,6 +19,7 @@ import {
 } from './adapters/minimax-video-adapter';
 import { generateWithGrokVideo, testGrokVideoConnectivity } from './adapters/grok-video-adapter';
 import { generateWithNavyVideo, testNavyVideoConnectivity } from './adapters/navy-video-adapter';
+import { generateWithHappyHorse, testHappyHorseConnectivity } from './adapters/happyhorse-adapter';
 import { VIDEO_PROVIDERS } from './video-provider-registry';
 
 export async function testVideoConnectivity(
@@ -37,6 +38,8 @@ export async function testVideoConnectivity(
       return testGrokVideoConnectivity(config);
     case 'navy-video':
       return testNavyVideoConnectivity(config);
+    case 'happyhorse':
+      return testHappyHorseConnectivity(config);
     default:
       return {
         success: false,
@@ -104,6 +107,8 @@ export async function generateVideo(
       return generateWithGrokVideo(config, options);
     case 'navy-video':
       return generateWithNavyVideo(config, options);
+    case 'happyhorse':
+      return generateWithHappyHorse(config, options);
     default:
       throw new Error(`Unsupported video provider: ${config.providerId}`);
   }

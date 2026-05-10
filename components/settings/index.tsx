@@ -198,6 +198,7 @@ const VIDEO_PROVIDER_NAMES: Record<VideoProviderId, string> = {
   'minimax-video': 'providerMiniMaxVideo',
   'grok-video': 'providerGrokVideo',
   'navy-video': 'providerNavyVideo',
+  happyhorse: 'providerHappyHorse',
 };
 
 const VIDEO_PROVIDER_ICONS: Record<VideoProviderId, string> = {
@@ -208,6 +209,7 @@ const VIDEO_PROVIDER_ICONS: Record<VideoProviderId, string> = {
   'minimax-video': '/logos/minimax.svg',
   'grok-video': '/logos/grok.svg',
   'navy-video': '/logos/navy.svg',
+  happyhorse: '/logos/qwen.svg',
 };
 
 interface SettingsDialogProps {

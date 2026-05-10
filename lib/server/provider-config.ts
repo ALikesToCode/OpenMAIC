@@ -108,6 +108,7 @@ const VIDEO_ENV_MAP: Record<string, string> = {
   VIDEO_MINIMAX: 'minimax-video',
   VIDEO_GROK: 'grok-video',
   VIDEO_NAVY: 'navy-video',
+  VIDEO_HAPPYHORSE: 'happyhorse',
 };
 
 const WEB_SEARCH_ENV_MAP: Record<string, string> = {

@@ -45,6 +45,7 @@ import {
   deleteStageData,
   renameStage,
   getFirstSlideByStages,
+  revokeThumbnailSlideMediaUrls,
 } from '@/lib/utils/stage-storage';
 import { ThumbnailSlide } from '@/components/slide-renderer/components/ThumbnailSlide';
 import type { Slide } from '@/lib/types/slides';
@@ -149,6 +150,14 @@ function HomePage() {
   const searchButtonRef = useRef<HTMLButtonElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const thumbnailsRef = useRef<Record<string, Slide>>({});
+
+  const replaceThumbnails = useCallback((slides: Record<string, Slide>) => {
+    const previous = thumbnailsRef.current;
+    thumbnailsRef.current = slides;
+    setThumbnails(slides);
+    window.setTimeout(() => revokeThumbnailSlideMediaUrls(previous), 0);
+  }, []);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -162,19 +171,21 @@ function HomePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [themeOpen]);
 
-  const loadClassrooms = async () => {
+  const loadClassrooms = useCallback(async () => {
     try {
       const list = await listStages();
       setClassrooms(list);
       // Load first slide thumbnails
       if (list.length > 0) {
         const slides = await getFirstSlideByStages(list.map((c) => c.id));
-        setThumbnails(slides);
+        replaceThumbnails(slides);
+      } else {
+        replaceThumbnails({});
       }
     } catch (err) {
       log.error('Failed to load classrooms:', err);
     }
-  };
+  }, [replaceThumbnails]);
 
   const { importing, fileInputRef, triggerFileSelect, handleFileChange } = useImportClassroom(
     () => {
@@ -194,7 +205,12 @@ function HomePage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Store hydration on mount
     loadClassrooms();
-  }, [revokeSlideObjectUrls]);
+
+    return () => {
+      revokeThumbnailSlideMediaUrls(thumbnailsRef.current);
+      thumbnailsRef.current = {};
+    };
+  }, [loadClassrooms, revokeSlideObjectUrls]);
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
