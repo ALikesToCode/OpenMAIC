@@ -3,6 +3,11 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { PPTCodeElement, CodeLine } from '@/lib/types/slides';
+import {
+  createCodeLineAnimationStates,
+  createCodeLineTypingDelays,
+  type LineAnimationState,
+} from './code-line-animation';
 
 // ==================== Shiki Singleton ====================
 
@@ -67,11 +72,6 @@ function parseShikiLines(html: string): string[] {
 export interface BaseCodeElementProps {
   elementInfo: PPTCodeElement;
   animate?: boolean;
-}
-
-interface LineAnimationState {
-  type: 'typing' | 'inserted' | 'replaced';
-  timestamp: number;
 }
 
 // ==================== Typing Easing ====================
@@ -474,41 +474,29 @@ export function BaseCodeElement({ elementInfo, animate }: BaseCodeElementProps) 
   const prevLinesRef = useRef<CodeLine[]>([]);
   const isFirstRenderRef = useRef(true);
 
-  const [animStates, setAnimStates] = useState<Map<string, LineAnimationState>>(
-    () => new Map<string, LineAnimationState>(),
+  const [animStates, setAnimStates] = useState<Map<string, LineAnimationState>>(() =>
+    createCodeLineAnimationStates({
+      lines,
+      previousLines: [],
+      animate: !!animate,
+      isFirstRender: true,
+    }),
   );
 
   useEffect(() => {
-    const states = new Map<string, LineAnimationState>();
+    const states = createCodeLineAnimationStates({
+      lines,
+      previousLines: prevLinesRef.current,
+      animate: !!animate,
+      isFirstRender: isFirstRenderRef.current,
+    });
 
     if (animate) {
-      if (isFirstRenderRef.current) {
-        isFirstRenderRef.current = false;
-        lines.forEach((line, i) => {
-          states.set(line.id, { type: 'typing', timestamp: i * 80 });
-        });
-      } else {
-        const prevIds = new Set(prevLinesRef.current.map((l) => l.id));
-
-        for (const line of lines) {
-          if (!prevIds.has(line.id)) {
-            states.set(line.id, { type: 'inserted', timestamp: 0 });
-          }
-        }
-
-        for (const line of lines) {
-          const prev = prevLinesRef.current.find((p) => p.id === line.id);
-          if (prev && prev.content !== line.content) {
-            states.set(line.id, { type: 'replaced', timestamp: 0 });
-          }
-        }
-      }
-
+      isFirstRenderRef.current = false;
       prevLinesRef.current = lines;
     }
 
-    const t = setTimeout(() => setAnimStates(states), 0);
-    return () => clearTimeout(t);
+    setAnimStates(states);
   }, [lines, animate]);
 
   useEffect(() => {
@@ -552,17 +540,16 @@ export function BaseCodeElement({ elementInfo, animate }: BaseCodeElementProps) 
 
   const lineHtmlMap = highlightedLines || fallbackLines;
 
-  const typingDelays = useMemo(() => {
-    const delays = new Map<string, number>();
-    let cumulative = 0;
-    for (const line of lines) {
-      if (animStates.has(line.id)) {
-        delays.set(line.id, cumulative);
-        cumulative += getTypingDuration(line.content) + LINE_GAP_MS;
-      }
-    }
-    return delays;
-  }, [lines, animStates]);
+  const typingDelays = useMemo(
+    () =>
+      createCodeLineTypingDelays({
+        lines,
+        animStates,
+        lineGapMs: LINE_GAP_MS,
+        getTypingDuration,
+      }),
+    [lines, animStates],
+  );
 
   const langDisplay = LANG_DISPLAY_NAMES[language] || language;
 
